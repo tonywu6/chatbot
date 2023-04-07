@@ -5,11 +5,12 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: Module",
+      "name": "run",
       "type": "python",
       "request": "launch",
-      "module": "dougbot3",
-      "args": ["start"],
+      "program": "cli.py",
+      "args": ["run"],
+      "console": "integratedTerminal",
       "justMyCode": false
     }
   ]

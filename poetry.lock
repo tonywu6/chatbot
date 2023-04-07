@@ -427,22 +427,6 @@ pycodestyle = ">=2.10.0,<2.11.0"
 pyflakes = ">=3.0.0,<3.1.0"
 
 [[package]]
-name = "flake8-annotations"
-version = "3.0.0"
-description = "Flake8 Type Annotation Checks"
-category = "dev"
-optional = false
-python-versions = ">=3.8.1,<4.0.0"
-files = [
-    {file = "flake8_annotations-3.0.0-py3-none-any.whl", hash = "sha256:ea927d31016515e9aa6e256651d74baeeee6fa4ad3f8383715ec5c0460a4c225"},
-    {file = "flake8_annotations-3.0.0.tar.gz", hash = "sha256:88c8b35a0db10b9a92be69ed3f81494509a18db1c3162551e57bc0fc35fab065"},
-]
-
-[package.dependencies]
-attrs = ">=21.4"
-flake8 = ">=5.0"
-
-[[package]]
 name = "flake8-bugbear"
 version = "23.3.23"
 description = "A plugin for flake8 finding likely bugs and design problems in your program. Contains warnings that don't belong in pyflakes and pycodestyle."
@@ -1340,4 +1324,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "0585b648c99d62058d48af51c3095f1b6bd13209f94ceac7d60b3497093b788d"
+content-hash = "2e89d4b07e71907f057d94f37db7eb054006547849268d65fe7594dc95a4a923"
