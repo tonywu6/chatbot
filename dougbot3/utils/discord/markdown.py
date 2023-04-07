@@ -4,6 +4,7 @@ from math import floor
 from textwrap import indent
 from typing import Iterable, Literal
 
+import emoji
 from discord.utils import escape_markdown
 
 RE_USER_MENTION = re.compile(r"<@(\d+)>")
@@ -105,11 +106,11 @@ def traffic_light(val: bool | None, strict=False):
     If `strict` is True, convert `None` to the `yellow` emoji.
     """
     if val:
-        return "🟢"
+        return emoji.emojize(":green_circle:")
     elif strict and val is None:
-        return "🟡"
+        return emoji.emojize(":yellow_circle:")
     else:
-        return "⛔"
+        return emoji.emojize(":red_circle:")
 
 
 def pointer(d: Literal["N", "E", "S", "W"]) -> str:

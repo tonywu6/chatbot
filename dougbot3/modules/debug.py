@@ -1,48 +1,39 @@
-from discord import Message
-from discord.ext.commands import Bot, Cog, Context, hybrid_command
+from discord import Client, Interaction
+from discord.app_commands import command
+from discord.ext.commands import Bot, Cog
 
-from dougbot3.utils.datetime import utcnow, utctimestamp
-from dougbot3.utils.markdown import code
+from dougbot3.utils.datetime import utcnow
+from dougbot3.utils.discord.markdown import code
 
 
 class DebugCommands(Cog):
-    @hybrid_command("echo", description="Echo a message back to the user.")
-    async def echo(self, ctx: Context, *, message: str):
-        return await ctx.send(message)
+    def __init__(self, client: Client):
+        self.client = client
 
-    @hybrid_command(
-        "ping",
-        description="Test the network latency between Discord and the bot.",
+    @command(name="echo", description="Echo a message back to the user")
+    async def echo(self, interaction: Interaction, *, message: str):
+        return await interaction.response.send_message(message)
+
+    @command(
+        name="ping",
+        description="Test the network latency between Discord and the bot",
     )
-    async def ping(self, ctx: Context):
-        return await ctx.send(f":PONG {utctimestamp()}")
+    async def ping(self, interaction: Interaction):
+        gateway_latency = self.client.latency * 1000
+        await interaction.response.send_message("Pong!")
 
-    @Cog.listener("on_message")
-    async def on_ping(self, message: Message):
-        gateway_dst = utctimestamp()
-
-        if message.content[:6] != ":PONG ":
-            return
-
-        try:
-            message_created = float(message.content[6:])
-        except ValueError:
-            return
-
-        gateway_latency = 1000 * (gateway_dst - message_created)
-        edit_start = utcnow()
-        await message.edit(
-            content=f"Gateway (http send -> gateway receive time): {gateway_latency:.3f}ms"
+        edit_timestamp = utcnow()
+        await interaction.edit_original_response(
+            content="Pong! Latencies:" f"\nGateway: {code(f'{gateway_latency:.2f}ms')}"
         )
-        edit_latency = (utcnow() - edit_start).total_seconds() * 1000
+        edit_latency = (utcnow() - edit_timestamp).total_seconds() * 1000
 
-        await message.edit(
-            content=(
-                f'Gateway: {code(f"{gateway_latency:.3f}ms")}'
-                f'\nHTTP API (Edit): {code(f"{edit_latency:.3f}ms")}'
-            )
+        return await interaction.edit_original_response(
+            content="Pong! Latencies:"
+            f"\nGateway: {code(f'{gateway_latency:.2f}ms')}"
+            f"\nHTTP API (Edit): {code(f'{edit_latency:.2f}ms')}"
         )
 
 
 async def setup(bot: Bot) -> None:
-    await bot.add_cog(DebugCommands())
+    await bot.add_cog(DebugCommands(bot))
