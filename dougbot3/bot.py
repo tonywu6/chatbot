@@ -8,8 +8,8 @@ from typing import Iterable, NoReturn
 from discord.ext.commands import Bot
 from loguru import logger
 
-from . import modules
-from .settings import BotSettings
+from dougbot3 import modules
+from dougbot3.settings import BotSettings
 
 
 def find_extensions(entry: ModuleType) -> frozenset[str]:

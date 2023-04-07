@@ -41,11 +41,14 @@ def run(autoreload: bool = False):
 
 
 @cli.command()
-async def sync_commands():
-    bot = await create_bot()
-    async with bot:
-        await bot.login(SECRETS.get_bot_token())
-        await bot.tree.sync()
+def sync_commands():
+    async def main():
+        bot = await create_bot()
+        async with bot:
+            await bot.login(SECRETS.get_bot_token())
+            await bot.tree.sync()
+
+    asyncio.run(main())
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from discord import Intents, Message
 from discord.ext.commands import Bot
 from pydantic import BaseModel, BaseSettings, SecretStr
 
-from .utils.config import use_settings_file
+from dougbot3.utils.config import use_settings_file
 
 DEFAULT_INTENTS = Intents.all() ^ Intents(Intents.typing.flag | Intents.presences.flag)
 

@@ -35,9 +35,12 @@ def configure_logging(
             " <bold><level>{level: <8}</level></bold>"
         )
         suffix = "<cyan>[{name}:{function}:{line}]</cyan>"
-        if record["level"].no < logging.WARNING:
-            return f"{prefix} {{message}} {suffix}\n"
-        return f"{prefix} <level>{{message}}</level> {suffix}\n"
+        message = "{message}"
+        if record["level"].no >= logging.WARNING:
+            message = "<level>{message}</level>"
+        if record["level"].no >= logging.ERROR and record["exception"]:
+            return f"{prefix} {message} {suffix}\n{{exception}}"
+        return f"{prefix} {message} {suffix}\n"
 
     loguru.logger.configure(
         handlers=[
