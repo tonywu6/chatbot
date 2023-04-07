@@ -1,18 +1,22 @@
 import asyncio
 import importlib
 import inspect
+import io
 import pkgutil
+import sys
+import traceback
 from contextlib import suppress
 from types import ModuleType
 from typing import Iterable, NoReturn
 
-from discord import Interaction
+from discord import File, Interaction
 from discord.app_commands import AppCommandError, CommandInvokeError
 from discord.ext.commands import Bot
 from loguru import logger
 
 from dougbot3 import modules
 from dougbot3.settings import BotSettings
+from dougbot3.utils.datetime import utcnow
 from dougbot3.utils.discord import Color2, Embed2
 
 
@@ -59,6 +63,21 @@ async def create_bot():
 
     @bot.tree.error
     async def on_app_command_error(interaction: Interaction, error: AppCommandError):
+        def censor_paths(tb: str):
+            """Remove all paths present in `sys.path` from the string."""
+            for path in sys.path:
+                tb = tb.replace(path, "")
+            return tb
+
+        def get_traceback(exc: BaseException) -> File:
+            if not isinstance(exc, BaseException):
+                return
+            tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
+            tb_body = censor_paths("".join(tb))
+            tb_file = io.BytesIO(tb_body.encode())
+            filename = f'stacktrace.{utcnow().isoformat().replace(":", ".")}.py'
+            return File(tb_file, filename=filename)
+
         if isinstance(error, CommandInvokeError):
             logger.exception(error)
         else:
@@ -78,10 +97,13 @@ async def create_bot():
             .set_description(str(error))
         )
 
-        with suppress(Exception):
+        with logger.catch(Exception):
             if interaction.response.is_done():
                 await interaction.followup.send(embed=report, ephemeral=True)
             else:
                 await interaction.response.send_message(embed=report, ephemeral=True)
+            if await bot.is_owner(interaction.user):
+                tb = get_traceback(error)
+                await interaction.followup.send(file=tb, ephemeral=True)
 
     return bot
