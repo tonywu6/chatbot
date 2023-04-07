@@ -28,7 +28,7 @@ class ManageChatView(View):
         self.sessions = sessions or ChatSessions()
 
     @button(label="End chat", style=ButtonStyle.red, custom_id="manage_chat:end_chat")
-    async def end_chat(self, interaction: Interaction, button: Button):
+    async def end_chat(self, interaction: Interaction, button: Button = None):
         await interaction.channel.delete()
         self.sessions.delete_session(interaction.channel)
 
@@ -37,7 +37,7 @@ class ManageChatView(View):
         style=ButtonStyle.blurple,
         custom_id="manage_chat:rebuild_history",
     )
-    async def rebuild_history(self, interaction: Interaction, button: Button):
+    async def rebuild_history(self, interaction: Interaction, button: Button = None):
         channel = interaction.channel
 
         if not isinstance(channel, Thread):
@@ -56,7 +56,13 @@ class ManageChatView(View):
                 pass
 
         if not completion:
-            raise UserInputError("Could not find session params from this thread.")
+            raise UserInputError(
+                (
+                    "Could not find the original session params for this chat."
+                    "\nThe message may have been deleted. Unfortunately, this means"
+                    " you can no longer have conversation in this thread."
+                )
+            )
 
         async for message in channel.history(
             limit=None,
@@ -66,13 +72,18 @@ class ManageChatView(View):
             if not message.content:
                 continue
             if message.author == interaction.user:
-                completion.messages.append(
-                    ChatMessage(role="user", content=message.content)
-                )
+                role = "user"
             elif message.author == self.bot.user:
-                completion.messages.append(
-                    ChatMessage(role="assistant", content=message.content)
+                role = "assistant"
+            else:
+                continue
+            completion.messages.append(
+                ChatMessage(
+                    role=role,
+                    content=message.content,
+                    message_id=message.id,
                 )
+            )
 
         self.sessions.set_session(channel, completion)
 
@@ -139,6 +150,33 @@ class ChatCommands(Cog):
         )
         await interaction.response.send_message(embed=response, ephemeral=True)
 
+    @command(name="stats", description="Get stats about the current chat.")
+    @guild_only()
+    async def stats(self, interaction: Interaction):
+        if not isinstance(interaction.channel, Thread):
+            raise UserInputError("This command can only be used in a thread.")
+
+        session = self.sessions.get_session(interaction.channel)
+
+        if not session:
+            view = ManageChatView(self.bot, self.sessions)
+            report = (
+                Embed2()
+                .set_color(Color2.dark_orange())
+                .set_title("Chat history not found in cache.")
+                .set_description("Rebuild it, then try again.")
+            )
+            await interaction.response.send_message(
+                view=view,
+                embed=report,
+                ephemeral=True,
+            )
+            return
+
+        report = session.describe_session().set_timestamp()
+
+        await interaction.response.send_message(embed=report, ephemeral=True)
+
     @Cog.listener("on_message")
     async def on_message(self, message: Message):
         if not isinstance(message.channel, Thread):
@@ -147,12 +185,12 @@ class ChatCommands(Cog):
         session = self.sessions.get_session(message.channel)
         if not session:
             return
-        if message.author.mention != session.request.user:
+        if message.author.mention != session.user:
             return
         if not message.content:
             return
 
-        request = session.request.with_outgoing(message)
+        request = session.with_outgoing(message)
 
         async with message.channel.typing():
             response = await openai.ChatCompletion.acreate(
@@ -160,8 +198,10 @@ class ChatCommands(Cog):
                 api_key=self._api_key.get_secret_value(),
             )
 
-        reply = session.request.update(message, response)
-        await message.channel.send(content=reply.content)
+        replies = session.process_response(message, response)
+        for reply in replies:
+            sent = await message.channel.send(content=reply.content)
+            reply.message_id = sent.id
 
 
 async def setup(bot: Bot) -> None:
