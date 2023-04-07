@@ -1,9 +1,13 @@
-from collections.abc import Callable
+import json
+from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from typing import Any, TypeVar
 
 import attr
+import toml
 from discord import Colour, Embed, Guild, Member, User
+
+from dougbot3.utils.discord.markdown import unwrap_codeblock
 
 T = TypeVar("T")
 
@@ -75,7 +79,7 @@ def _datetime_convert(d: str | datetime | None) -> datetime:
 class EmbedField(_Serializable):
     name: str = attr.ib(converter=str)
     value: str = attr.ib(converter=str)
-    inline: bool = attr.ib(converter=_optional_convert(bool), default=True)
+    inline: bool = attr.ib(converter=_optional_convert(bool), default=False)
 
     def replace(self, __old: str, __new: str) -> "EmbedField":
         return attr.evolve(self, value=self.value.replace(__old, __new))
@@ -162,7 +166,7 @@ class Embed2:
 
         prefix_help = (
             command_help
-            .set_author(name=ctx.me.display_name, icon_url=ctx.me.avatar_url)
+            .set_author(name=ctx.me.display_name, icon_url=ctx.me.avatar.url)
             .add_field(name='Syntax', value='prefix')
             .add_field(name='Usage', value='See current prefix.')
             .set_timestamp(utcnow())
@@ -283,7 +287,7 @@ class Embed2:
         """
         return attr.evolve(self)
 
-    def add_field(self, *, name: str, value: str, inline: bool = True) -> "Embed2":
+    def add_field(self, name: str, value: str, *, inline: bool = False) -> "Embed2":
         """Return a new embed with a field appended.
 
         :return: The resulting embed.
@@ -293,7 +297,12 @@ class Embed2:
         return attr.evolve(self, fields=fields)
 
     def insert_field_at(
-        self, index: int, *, name: str, value: str, inline: bool = True
+        self,
+        index: int,
+        name: str,
+        value: str,
+        *,
+        inline: bool = False,
     ) -> "Embed2":
         """Return a new embed with a field inserted at ``index``.
 
@@ -315,7 +324,12 @@ class Embed2:
         return attr.evolve(self, fields=fields)
 
     def set_field_at(
-        self, index: int, *, name: str, value: str, inline: bool = True
+        self,
+        index: int,
+        name: str,
+        value: str,
+        *,
+        inline: bool = False,
     ) -> "Embed2":
         """Return a new embed with the field at ``index`` replaced.
 
@@ -371,7 +385,11 @@ class Embed2:
         return attr.evolve(self, timestamp=timestamp)
 
     def set_author(
-        self, *, name: str | None, url: str = _EMPTY, icon_url: str = _EMPTY
+        self,
+        name: str | None,
+        *,
+        url: str = _EMPTY,
+        icon_url: str = _EMPTY,
     ) -> "Embed2":
         """Return a new embed with author info set.
 
@@ -390,7 +408,7 @@ class Embed2:
         """
         return attr.evolve(self, author=_EMPTY)
 
-    def set_footer(self, *, text: str | None, icon_url=_EMPTY) -> "Embed2":
+    def set_footer(self, text: str | None, *, icon_url=_EMPTY) -> "Embed2":
         """Return a new embed containing the supplied footer.
 
         Pass ``text=None`` to remove the footer.
@@ -402,13 +420,13 @@ class Embed2:
             return attr.evolve(self, footer=_EMPTY)
         return attr.evolve(self, footer=EmbedFooter(text, icon_url))
 
-    def set_image(self, *, url: str | None) -> "Embed2":
+    def set_image(self, url: str | None) -> "Embed2":
         return attr.evolve(self, image=EmbedAttachment(url) if url else _EMPTY)
 
-    def set_video(self, *, url: str | None) -> "Embed2":
+    def set_video(self, url: str | None) -> "Embed2":
         return attr.evolve(self, video=EmbedAttachment(url) if url else _EMPTY)
 
-    def set_thumbnail(self, *, url: str | None) -> "Embed2":
+    def set_thumbnail(self, url: str | None) -> "Embed2":
         return attr.evolve(self, thumbnail=EmbedAttachment(url) if url else _EMPTY)
 
     def set_color(self, color: int | Colour | None) -> "Embed2":
@@ -435,7 +453,7 @@ class Embed2:
         :return: The resulting embed.
         :rtype: :class:`Embed2`
         """
-        return self.set_author(name=str(user), icon_url=user.avatar_url)
+        return self.set_author(name=str(user), icon_url=user.avatar.url)
 
     def use_member_color(self, member: Member):
         """Return a new embed with color set to the member's visible color in\
@@ -457,7 +475,7 @@ class Embed2:
         :return: The resulting embed.
         :rtype: :class:`Embed2`
         """
-        author = EmbedAuthor(name=str(person), url=url, icon_url=person.avatar_url)
+        author = EmbedAuthor(name=str(person), url=url, icon_url=person.avatar.url)
         return attr.evolve(self, author=author, color=person.color)
 
     def decorated(self, guild: Guild, *, url: str = _EMPTY):
@@ -468,7 +486,7 @@ class Embed2:
         :return: The resulting embed.
         :rtype: :class:`Embed2`
         """
-        author = EmbedAuthor(name=str(guild), url=url, icon_url=guild.icon_url)
+        author = EmbedAuthor(name=str(guild), url=url, icon_url=guild.icon.url)
         return attr.evolve(self, author=author)
 
     def set_author_url(self, url: str | None) -> "Embed2":
@@ -529,3 +547,42 @@ class Embed2:
 class EmbedOversizedError(ValueError):
     def __init__(self, component: str, limit: str, unit="characters"):
         super().__init__(f"{component} oversized: {limit} {unit}")
+
+
+class EmbedReader(Mapping):
+    def __init__(self, embed: Embed) -> None:
+        self.embed = Embed2.upgrade(embed)
+
+    def _load_data(self, text: str) -> dict:
+        """Try to find and load a JSON/TOML string."""
+        data: dict | None = None
+        for lang, loader, exceptions in [
+            ("toml", toml.loads, (toml.TomlDecodeError,)),
+            ("json", json.loads, (json.JSONDecodeError,)),
+        ]:
+            if data is not None:
+                break
+            try:
+                code = unwrap_codeblock(text, lang)
+                data = loader(code)
+            except (ValueError, *exceptions):
+                continue
+        if not data:
+            raise ValueError("No valid JSON or TOML found in code block.")
+        return data
+
+    def __getitem__(self, field: str) -> str | dict:
+        result = self.embed.get_field_value(field, _EMPTY)
+        if result is _EMPTY:
+            raise KeyError(field)
+        try:
+            return self._load_data(result)
+        except ValueError:
+            return result
+
+    def __iter__(self):
+        for f in self.embed.fields:
+            yield f.name
+
+    def __len__(self) -> int:
+        return len(self.embed.fields)

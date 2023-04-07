@@ -5,13 +5,18 @@ import io
 import pkgutil
 import sys
 import traceback
-from contextlib import suppress
 from types import ModuleType
 from typing import Iterable, NoReturn
 
-from discord import File, Interaction
-from discord.app_commands import AppCommandError, CommandInvokeError
-from discord.ext.commands import Bot
+from discord import File, Forbidden, Interaction, Permissions
+from discord.app_commands import (
+    AppCommandError,
+    BotMissingPermissions,
+    CommandInvokeError,
+    TransformerError,
+)
+from discord.ext.commands import Bot, ConversionError, UserInputError
+from discord.utils import oauth_url
 from loguru import logger
 
 from dougbot3 import modules
@@ -61,23 +66,17 @@ async def create_bot():
     extensions = find_extensions(modules)
     await load_all_extensions(bot, extensions)
 
+    @bot.listen()
+    async def on_ready():
+        invite_url = oauth_url(
+            bot.user.id,
+            permissions=Permissions(532576324672),
+            scopes=["bot", "applications.commands"],
+        )
+        logger.info(f"Invite URL: {invite_url}")
+
     @bot.tree.error
     async def on_app_command_error(interaction: Interaction, error: AppCommandError):
-        def censor_paths(tb: str):
-            """Remove all paths present in `sys.path` from the string."""
-            for path in sys.path:
-                tb = tb.replace(path, "")
-            return tb
-
-        def get_traceback(exc: BaseException) -> File:
-            if not isinstance(exc, BaseException):
-                return
-            tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
-            tb_body = censor_paths("".join(tb))
-            tb_file = io.BytesIO(tb_body.encode())
-            filename = f'stacktrace.{utcnow().isoformat().replace(":", ".")}.py'
-            return File(tb_file, filename=filename)
-
         if isinstance(error, CommandInvokeError):
             logger.exception(error)
         else:
@@ -89,21 +88,52 @@ async def create_bot():
                 error=error,
             )
 
+        unwrapped_error = getattr(error, "original", None) or error.__cause__ or error
+
+        def get_traceback() -> File:
+            if not isinstance(unwrapped_error, BaseException):
+                return
+            tb = traceback.format_exception(
+                type(unwrapped_error),
+                unwrapped_error,
+                unwrapped_error.__traceback__,
+            )
+            tb_body = "".join(tb)
+            for path in sys.path:
+                tb_body = tb_body.replace(path, "")
+            tb_file = io.BytesIO(tb_body.encode())
+            filename = f'stacktrace.{utcnow().isoformat().replace(":", ".")}.py'
+            return File(tb_file, filename=filename)
+
+        match unwrapped_error:
+            case UserInputError() | ConversionError() | TransformerError():
+                color = Color2.orange()
+                title = "HTTP 400 Bad Request"
+            case Forbidden():
+                color = Color2.red()
+                title = "HTTP 403 Forbidden"
+            case BotMissingPermissions():
+                color = Color2.dark_red()
+                title = "HTTP 503 Service Unavailable"
+            case _:
+                color = Color2.red()
+                title = "HTTP 500 Internal Server Error"
+
         report = (
             Embed2()
             .set_timestamp()
-            .set_color(Color2.red())
-            .set_title("Error while executing command")
-            .set_description(str(error))
+            .set_color(color)
+            .set_title(title)
+            .set_description(str(unwrapped_error))
         )
 
         with logger.catch(Exception):
-            if interaction.response.is_done():
-                await interaction.followup.send(embed=report, ephemeral=True)
-            else:
-                await interaction.response.send_message(embed=report, ephemeral=True)
+            response = {"embed": report, "ephemeral": True}
             if await bot.is_owner(interaction.user):
-                tb = get_traceback(error)
-                await interaction.followup.send(file=tb, ephemeral=True)
+                response["file"] = get_traceback()
+            if interaction.response.is_done():
+                await interaction.followup.send(**response)
+            else:
+                await interaction.response.send_message(**response)
 
     return bot

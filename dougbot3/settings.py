@@ -1,12 +1,13 @@
 from typing import Callable
 
-from discord import Intents, Message
+from discord import AllowedMentions, Intents, Message
 from discord.ext.commands import Bot
 from pydantic import BaseModel, BaseSettings, SecretStr
 
 from dougbot3.utils.config import use_settings_file
 
 DEFAULT_INTENTS = Intents.all() ^ Intents(Intents.typing.flag | Intents.presences.flag)
+DEFAULT_MENTIONS = AllowedMentions(everyone=False, roles=False, users=False)
 
 
 class _Intents(Intents):
@@ -23,6 +24,20 @@ class _Intents(Intents):
         raise ValueError(f"Invalid intents {value}")
 
 
+class _AllowedMentions(AllowedMentions):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, value) -> Intents:  # noqa: ANN001
+        if isinstance(value, AllowedMentions):
+            return value
+        if isinstance(value, dict):
+            return cls(**value)
+        raise ValueError(f"Invalid allowed mentions {value}")
+
+
 async def resolve_prefix(bot: Bot, msg: Message):
     if msg.guild is None:
         return ""
@@ -31,6 +46,8 @@ async def resolve_prefix(bot: Bot, msg: Message):
 
 class BotOptions(BaseModel):
     intents: _Intents = DEFAULT_INTENTS
+    allowed_mentions: _AllowedMentions = DEFAULT_MENTIONS
+
     command_prefix: list[str] | Callable = resolve_prefix
     case_insensitive: bool = True
     strip_after_prefix: bool = True
