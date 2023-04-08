@@ -7,7 +7,7 @@ from markdown_it.tree import SyntaxTreeNode
 from more_itertools import constrained_batches, split_at
 from ruamel import yaml
 
-from dougbot3.modules.chat.helpers import is_system_message
+from dougbot3.modules.chat.helpers import is_system_message, system_message
 from dougbot3.modules.chat.models import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -15,6 +15,7 @@ from dougbot3.modules.chat.models import (
     ChatMessageType,
     DiscordMessage,
 )
+from dougbot3.utils.discord.color import Color2
 from dougbot3.utils.discord.embed import Embed2, EmbedReader
 from dougbot3.utils.discord.file import discord_open
 from dougbot3.utils.discord.markdown import divide_text, pre
@@ -204,8 +205,7 @@ class ChatMessageChain:
 
         choice = response["choices"][0]
         text = choice["message"]["content"]
-
-        logger.info("Received response. Finish reason: {0}", choice["finish_reason"])
+        finish_reason = choice["finish_reason"]
 
         parser = MarkdownIt()
         tokens = parser.parse(text)
@@ -237,22 +237,34 @@ class ChatMessageChain:
         def is_rich_content(message: DiscordMessage) -> bool:
             return message.get("embeds") or message.get("files")
 
-        consolidated: list[DiscordMessage] = []
+        results: list[DiscordMessage] = []
 
         for group in split_at(chunks, is_rich_content, keep_separator=True):
             if is_rich_content(group[0]):
-                consolidated.extend(group)
+                results.extend(group)
                 continue
             texts = [chunk["content"] for chunk in group]
             paragraphs = constrained_batches(texts, MAX_MESSAGE_LENGTH, strict=True)
-            consolidated.extend(({"content": "\n".join(p)} for p in paragraphs))
+            results.extend(({"content": "\n".join(p)} for p in paragraphs))
 
         logger.info(
             "Parsed a completion response of length {length} into {num} messages",
             length=len(text),
-            num=len(consolidated),
+            num=len(results),
         )
-        return consolidated
+
+        logger.info("Finish reason: {0}", finish_reason)
+
+        if finish_reason != "stop":
+            warning = (
+                system_message()
+                .set_title("Finish reason")
+                .set_description(f"Finish reason was `{finish_reason}`")
+                .set_color(Color2.orange())
+            )
+            results.append({"embeds": [warning]})
+
+        return results
 
     def remove_messages(self, *message_ids: int) -> None:
         filtered = [

@@ -6,11 +6,23 @@ from discord import File, Interaction, errors as discord_errors
 from discord.abc import Messageable
 from discord.app_commands import errors as app_cmd_errors
 from discord.ext.commands import Bot, errors as ext_cmd_errors
+from discord.ui import Button, View, button
 from loguru import logger
 
 from dougbot3.utils.datetime import utcnow
 from dougbot3.utils.discord import Color2, Embed2
 from dougbot3.utils.discord.file import discord_open
+
+
+class ErrorView(View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @button(label="Close", custom_id="delete_error:close")
+    async def close(self, interaction: Interaction, button: Button = None):
+        if not interaction.message:
+            return
+        await interaction.message.delete()
 
 
 async def report_error(
@@ -74,13 +86,14 @@ async def report_error(
     )
 
     with logger.catch(Exception):
-        response = {"embed": report}
+        response = {"embed": report, "view": ErrorView()}
         if interaction:
+            response["ephemeral"] = True
             if bot and await bot.is_owner(interaction.user):
                 response["file"] = get_traceback()
             if interaction.response.is_done():
-                await interaction.followup.send(**response, ephemeral=True)
+                await interaction.followup.send(**response)
             else:
-                await interaction.response.send_message(**response, ephemeral=True)
+                await interaction.response.send_message(**response)
         if messageable:
             await messageable.send(**response)

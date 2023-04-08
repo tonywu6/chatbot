@@ -6,11 +6,6 @@ from pydantic import BaseModel, Field
 
 ChatModel = Literal["gpt-3.5-turbo", "gpt-3.5-turbo-0301"]
 
-TOKEN_LIMITS: dict[ChatModel, int] = {
-    "gpt-3.5-turbo": 4096,
-    "gpt-3.5-turbo-0301": 4096,
-}
-
 
 class ChatCompletionChoiceMessage(TypedDict):
     role: Literal["system", "user", "assistant"]
@@ -60,7 +55,7 @@ class ChatCompletionRequest(BaseModel):
     messages: list[ChatMessage] = []
     temperature: float = 0.7
     top_p: float = 1
-    max_tokens: Optional[float] = 2000
+    max_tokens: Optional[int] = 2000
     user: str = "user"
 
 

@@ -14,6 +14,7 @@ from dougbot3.modules.chat.helpers import (
     Cancellation,
     is_system_message,
     system_message,
+    token_limit_warning,
 )
 from dougbot3.modules.chat.models import ChatCompletionRequest, ChatModel
 from dougbot3.modules.chat.session import ChatMessageChain
@@ -220,6 +221,7 @@ class ChatCommands(Cog):
 
         async with thread.typing():
             logger.info("Chat {0}: sending API request", thread.mention)
+
             try:
                 response = await openai.ChatCompletion.acreate(
                     **session.to_request().dict(),
@@ -228,14 +230,15 @@ class ChatCommands(Cog):
             except Exception as e:
                 await report_error(e, bot=self.bot, messageable=thread)
                 return
+
             replies = session.prepare_replies(response)
             for reply in replies:
                 await thread.send(**reply)
-            logger.info(
-                "Chat {0}: resolved {1} replies",
-                thread.mention,
-                len(replies),
-            )
+
+            logger.info("Chat {0}: resolved {1} replies", thread.mention, len(replies))
+
+        if warning := token_limit_warning(session.usage, session.atom.model):
+            await thread.send(embed=warning)
 
 
 async def setup(bot: Bot) -> None:
