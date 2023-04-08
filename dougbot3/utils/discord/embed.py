@@ -1,11 +1,13 @@
 import json
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
-from typing import Any, TypeVar
+from typing import Any, Protocol, TypeVar
 
 import attr
 import toml
 from discord import Colour, Embed, Guild, Member, User
+from discord.types.embed import EmbedType
+from ruamel import yaml
 
 from dougbot3.utils.discord.markdown import unwrap_codeblock
 
@@ -141,6 +143,11 @@ class EmbedFooter(_Serializable):
             raise EmbedOversizedError("Footer text", LEN_LIMIT_FOOTER_TEXT)
 
 
+class _Addressable(Protocol):
+    name: str
+    url: str
+
+
 @attr.s(slots=True, eq=True, frozen=True)
 class Embed2:
     """attr.s dataclass. Replaces :class:`discord.Embed`.
@@ -208,19 +215,23 @@ class Embed2:
     footer: EmbedFooter = attr.ib(converter=EmbedFooter.instantiate, default=_EMPTY)
 
     image: EmbedAttachment = attr.ib(
-        converter=EmbedAttachment.instantiate, default=_EMPTY
+        converter=EmbedAttachment.instantiate,
+        default=_EMPTY,
     )
     thumbnail: EmbedAttachment = attr.ib(
-        converter=EmbedAttachment.instantiate, default=_EMPTY
+        converter=EmbedAttachment.instantiate,
+        default=_EMPTY,
     )
     video: EmbedAttachment = attr.ib(
-        converter=EmbedAttachment.instantiate, default=_EMPTY
+        converter=EmbedAttachment.instantiate,
+        default=_EMPTY,
     )
     provider: EmbedProvider = attr.ib(
-        converter=EmbedProvider.instantiate, default=_EMPTY
+        converter=EmbedProvider.instantiate,
+        default=_EMPTY,
     )
 
-    type: str = attr.ib(default="rich")
+    type: EmbedType = attr.ib(default="rich")
 
     @property
     def colour(self):
@@ -533,14 +544,45 @@ class Embed2:
         )
 
     def __str__(self) -> str:
-        lines = []
+        lines: list[str] = []
+
+        def format_addressable(info: _Addressable | None) -> str | None:
+            if not info:
+                return None
+            if info.name and info.url:
+                return f"{info.name} <{info.url}>"
+            elif info.name:
+                return info.name
+            elif info.url:
+                return info.url
+            else:
+                return None
+
+        front_matters: dict[str, str | None] = {}
+        front_matters["source"] = format_addressable(self.provider)
+        front_matters["author"] = format_addressable(self.author)
+        front_matters["url"] = self.url
+        front_matters["type"] = self.type
+        front_matters = {k: v for k, v in front_matters.items() if v}
+
+        if front_matters:
+            serialized = yaml.safe_dump(front_matters, default_flow_style=False)
+            lines.append("---")
+            lines.append(str(serialized).strip())
+            lines.append("---")
+            lines.append("")
+
         if self.title:
             lines.append(f"__**{self.title}**__")
+            lines.append("")
         if self.description:
-            lines.append(self.description + "\n")
+            lines.append(self.description)
+            lines.append("")
         for f in self.fields:
             lines.append(f"**{f.name}**")
-            lines.append(f.value + "\n")
+            lines.append(f.value)
+            lines.append("")
+
         return "\n".join(lines)
 
 
@@ -554,11 +596,12 @@ class EmbedReader(Mapping):
         self.embed = Embed2.upgrade(embed)
 
     def _load_data(self, text: str) -> dict:
-        """Try to find and load a JSON/TOML string."""
+        """Try to find and load a JSON/TOML/YAML string."""
         data: dict | None = None
         for lang, loader, exceptions in [
             ("toml", toml.loads, (toml.TomlDecodeError,)),
             ("json", json.loads, (json.JSONDecodeError,)),
+            ("yaml", yaml.safe_load, (yaml.YAMLError,)),
         ]:
             if data is not None:
                 break

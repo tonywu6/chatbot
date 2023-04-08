@@ -1,11 +1,14 @@
 import os
 
+import orjson
 import psutil
-from discord import Interaction
-from discord.app_commands import Choice, choices, command
+from discord import Interaction, Message
+from discord.app_commands import Choice, Group, choices, context_menu
 from discord.ext.commands import Bot, Cog
 
 from dougbot3.utils.datetime import utcnow
+from dougbot3.utils.discord.embed import Embed2
+from dougbot3.utils.discord.file import discord_open
 from dougbot3.utils.discord.markdown import code
 
 
@@ -13,11 +16,13 @@ class DebugCommands(Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    @command(name="echo", description="Echo a message back to the user")
+    debug_commands = Group(name="debug", description="Debugging commands")
+
+    @debug_commands.command(name="echo", description="Echo a message back to the user")
     async def echo(self, interaction: Interaction, *, message: str):
         return await interaction.response.send_message(message)
 
-    @command(
+    @debug_commands.command(
         name="ping",
         description="Test the network latency between Discord and the bot",
     )
@@ -37,7 +42,7 @@ class DebugCommands(Cog):
             f"\nHTTP API (Edit): {code(f'{edit_latency:.2f}ms')}"
         )
 
-    @command(name="kill")
+    @debug_commands.command(name="kill")
     @choices(
         signal=[
             Choice(name="SIGINT", value=2),
@@ -53,5 +58,38 @@ class DebugCommands(Cog):
             return psutil.Process(os.getpid()).send_signal(signal)
 
 
+@context_menu(name="Serialize message")
+async def serialize_message(interaction: Interaction, message: Message):
+    info = {
+        "id": message.id,
+        "url": message.jump_url,
+        "timestamp": message.created_at,
+        "author": f"{str(message.author)} {message.author.mention}",
+        "channel": f"{str(message.channel)} {message.channel.mention}",
+        "content": message.content,
+    }
+
+    info["embeds"] = [
+        {"data": e.to_dict(), "preview": str(Embed2.upgrade(e))} for e in message.embeds
+    ]
+    info["files"] = [a.to_dict() for a in message.attachments]
+
+    if message.reference:
+        info["reference"] = message.reference.jump_url
+
+    info["mentions"] = {
+        "everyone": bool(message.mention_everyone),
+        "roles": [r.mention for r in message.role_mentions],
+        "users": [u.mention for u in message.mentions],
+    }
+    info["suppress_embeds"] = message.flags.suppress_embeds
+
+    with discord_open(f"message.{message.id}.json") as (stream, file):
+        stream.write(orjson.dumps(info, option=orjson.OPT_INDENT_2))
+
+    await interaction.response.send_message(files=[file], ephemeral=True)
+
+
 async def setup(bot: Bot) -> None:
+    bot.tree.add_command(serialize_message)
     await bot.add_cog(DebugCommands(bot))

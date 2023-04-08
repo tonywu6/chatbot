@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 from math import floor
 from textwrap import indent
-from typing import Iterable, Literal
+from typing import Container, Iterable, Literal
 
 import emoji
 from discord.utils import escape_markdown
@@ -229,3 +229,38 @@ def iter_urls(s: str) -> Iterable[str]:
     """
     for m in RE_URL.finditer(s):
         yield m.group(0)
+
+
+# From ddarknut. Blessed.
+def divide_text(
+    text: str,
+    maxlen: int,
+    *,
+    delimiter: Container[str],
+    hyphen="-",
+) -> Iterable[str]:
+    """Break long text into smaller parts of roughly the same size without\
+        breaking inside words/lines."""
+
+    if not text:
+        yield text
+        return
+
+    end = sep = begin = 0
+    splits = 0
+    while begin < len(text):
+        if end >= len(text):
+            yield text[begin:]
+            return
+        if text[end] in delimiter:
+            sep = end
+        end += 1
+        if end > begin + maxlen:
+            if sep > begin:
+                end = sep
+                yield text[begin:end]
+            else:
+                end -= len(hyphen) + 1
+                yield text[begin:end] + hyphen
+            begin = end
+            splits += 1
