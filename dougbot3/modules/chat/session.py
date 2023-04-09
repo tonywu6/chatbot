@@ -21,8 +21,6 @@ from dougbot3.modules.chat.models import (
     ChatMessage,
     ChatMessageType,
     DiscordMessage,
-    TriggerMessage,
-    TriggerTiming,
 )
 from dougbot3.settings import AppSecrets
 from dougbot3.utils.config import load_settings
@@ -42,11 +40,11 @@ class ChatSession:
         self,
         assistant: str,
         request: ChatCompletionRequest,
-        features: ChatFeatures = ChatFeatures(),
+        features: ChatFeatures | None = None,
     ):
         self.atom = request
         self.assistant = assistant
-        self.features = features
+        self.features = features or ChatFeatures()
 
         self.messages: list[ChatMessage] = []
         self.usage: int = -1
@@ -94,7 +92,7 @@ class ChatSession:
                 params = reader["Parameters"]
                 atom = ChatCompletionRequest(**params)
                 features = ChatFeatures(**reader.get("Features", {}))
-            except LookupError:
+            except (LookupError, ValueError):
                 logger.info("Chat {0}: not a valid thread", thread.mention)
                 raise ValueError
             else:
@@ -331,7 +329,9 @@ class ChatSession:
     async def write_title(self):
         request = ChatCompletionRequest(max_tokens=256, temperature=0.2)
         session = ChatSession(request=request, assistant=request.model)
-        messages: list[str] = [f"{m.role}: {m.content}" for m in self.messages]
+        messages: list[str] = [
+            f"{m.role}: {m.content}" for m in self.messages if m.role != "system"
+        ]
         session.messages.append(
             ChatMessage(
                 role="user",
@@ -340,7 +340,7 @@ class ChatSession:
                 " as if you are writing an article title."
                 " Your slug should be in the conversation's original language."
                 " Respond with just the topic itself."
-                " Avoid punctuation such as quotes or periods.",
+                " Do not put quotes or periods in your response.",
             ),
         )
         session.messages.append(
@@ -381,11 +381,11 @@ class ChatSession:
 
     def should_answer(self, message: Message):
         result = not message.author.mention == self.assistant
-        if self.features.timing & TriggerTiming.ON_MENTION.value:
+        if self.features.timing == "only when mentioned":
             result = result and self.assistant in [m.mention for m in message.mentions]
-        if self.features.timing & TriggerMessage.FROM_INITIATOR.value:
+        if self.features.reply_to == "you":
             result = result and message.author.mention == self.atom.user
-        elif self.features.timing & TriggerMessage.FROM_HUMAN.value:
+        elif self.features.reply_to == "every human":
             result = result and not message.author.bot
         return result
 

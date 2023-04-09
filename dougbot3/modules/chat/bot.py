@@ -14,7 +14,7 @@ from discord import (
     TextChannel,
     Thread,
 )
-from discord.app_commands import choices, command, describe, guild_only
+from discord.app_commands import command, describe, guild_only
 from discord.app_commands.checks import bot_has_permissions
 from discord.ext.commands import Bot, Cog, UserInputError
 from discord.ui import Button, button
@@ -25,12 +25,12 @@ from more_itertools import first
 from dougbot3.modules.chat.controller import ChatController
 from dougbot3.modules.chat.helpers import system_message
 from dougbot3.modules.chat.models import (
-    DEFAULT_REQUEST_TIMING,
-    REQUEST_TIMINGS,
     ChatCompletionRequest,
     ChatFeatures,
     ChatMessage,
     ChatModel,
+    ReplyTo,
+    Timing,
 )
 from dougbot3.modules.chat.session import ChatSession
 from dougbot3.modules.chat.settings import ChatOptions
@@ -152,8 +152,9 @@ class ChatCommands(Cog):
         preset="Include predefined initial messages.",
         model="The GPT model to use.",
         system_message="Provide a custom system message.",
+        timing="Control when the bot will respond.",
+        reply_to="Control to whose messages the bot will respond.",
     )
-    @choices(timing=REQUEST_TIMINGS)
     @guild_only()
     @bot_has_permissions(
         view_channel=True,
@@ -166,7 +167,8 @@ class ChatCommands(Cog):
         interaction: Interaction,
         preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),
         system_message: Optional[str] = None,
-        timing: int = DEFAULT_REQUEST_TIMING,
+        timing: Timing = "immediately",
+        reply_to: ReplyTo = "you",
         model: ChatModel = "gpt-3.5-turbo-0301",
         temperature: float = 0.7,
         max_tokens: int = 2000,
@@ -226,7 +228,7 @@ class ChatCommands(Cog):
             max_tokens=max_tokens,
             messages=preset_dialog,
         )
-        features = ChatFeatures(timing=timing)
+        features = ChatFeatures(timing=timing, reply_to=reply_to)
         session = ChatSession(
             assistant=self.bot.user.mention,
             request=request,
@@ -294,7 +296,10 @@ class ChatCommands(Cog):
             return
 
         before = payload.cached_message
-        after = await channel.fetch_message(payload.message_id)
+        try:
+            after = await channel.fetch_message(payload.message_id)
+        except Exception:
+            return
 
         if before and before.flags.loading:
             # respond to edits due to command deferral

@@ -34,7 +34,9 @@ The most prominent strain of A.I. encodes a flawed conception of language and kn
 
 ### Multiple participants
 
-The bot listens to other users as well (including other bots). In the request, messages from other users will look like
+The bot listens to other users as well, including other bots and Discord system messages.
+
+In the request, messages from other users will look like:
 
 ```json
 {
@@ -43,7 +45,20 @@ The bot listens to other users as well (including other bots). In the request, m
 }
 ```
 
-By default, the bot will respond after every message from the user who started the thread. Use the `timing` option to control who the bot will respond to (you, any human, anyone including bots), and when (after every message, only when mentioned).
+Messages from Discord will look like:
+
+```json
+{
+  "role": "system",
+  "content": "Discord: <@bot> added <@user> to the thread"
+}
+```
+
+### Response timing
+
+Use the `timing` option to control when the bot will respond: after every message, only when mentioned.
+
+Use the `reply_to` option to control to whom the bot will respond: everyone (including bots and Discord), every human, or you.
 
 ### Presets
 
