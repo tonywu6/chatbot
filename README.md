@@ -2,6 +2,7 @@ GPT-powered Discord bot for my own server.
 
 ```bash
 poetry install
+python cli.py sync-commands
 python cli.py run
 ```
 
