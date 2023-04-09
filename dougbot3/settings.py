@@ -63,8 +63,8 @@ class BotSettings(BaseSettings):
 class AppSecrets(BaseSettings):
     Config = use_settings_file("instance/secrets.toml")
 
-    DISCORD_BOT_TOKEN: SecretStr = SecretStr("")
-    OPENAI_TOKEN: SecretStr = SecretStr("")
+    DISCORD_BOT_TOKEN: SecretStr
+    OPENAI_TOKEN: SecretStr
 
     def get_bot_token(self):
         return self.DISCORD_BOT_TOKEN.get_secret_value()

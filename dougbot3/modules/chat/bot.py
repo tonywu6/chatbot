@@ -28,6 +28,7 @@ from dougbot3.modules.chat.models import ChatCompletionRequest, ChatModel
 from dougbot3.modules.chat.session import ChatSession
 from dougbot3.modules.chat.settings import ChatOptions
 from dougbot3.settings import AppSecrets
+from dougbot3.utils.config import load_settings
 from dougbot3.utils.discord import Embed2
 from dougbot3.utils.discord.color import Color2
 from dougbot3.utils.discord.file import discord_open
@@ -93,13 +94,13 @@ class ManageChatView(View):
 class ChatCommands(Cog):
     def __init__(self, bot: Bot) -> None:
         self.options = ChatOptions()
-        self._api_key = AppSecrets().OPENAI_TOKEN
 
         self.controller = ChatController()
         self.bot = bot
         self.bot.add_view(ManageChatView(self.bot, self.controller))
 
         self._fake = Faker("en-US")
+        self._api_key = load_settings(AppSecrets).OPENAI_TOKEN
 
     @command(name="chat", description="Start a chat thread with the bot.")
     @describe(model="The GPT model to use.")

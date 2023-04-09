@@ -1,13 +1,14 @@
+import inspect
 import json
 import os
 from functools import cache
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TypeVar
 
 import toml
 import yaml
 from loguru import logger
-from pydantic import BaseSettings, Extra, SecretStr
+from pydantic import BaseSettings, Extra, SecretStr, ValidationError
 from pydantic.env_settings import SettingsSourceCallable
 
 
@@ -94,3 +95,25 @@ def use_settings_file(path: str | Path, **extra_config) -> _SettingsConfig:
         setattr(Config, k, v)
 
     return Config
+
+
+T = TypeVar("T", bound=BaseSettings)
+
+
+def load_settings(settings_cls: type[T]) -> T:
+    try:
+        return settings_cls()
+    except ValidationError as e:
+        filename = inspect.getsourcefile(settings_cls)
+        lines, line_no = inspect.getsourcelines(settings_cls)
+        logger.error(
+            f"\nError loading settings: {settings_cls.__name__}"
+            "\n------------"
+            f"\nExpected location: {settings_cls.Config.config_path}"
+            " (or provide via environment variables)"
+            f"\nSettings defined at {filename}:{line_no}"
+            "\n------------"
+            f"\n{{error}}",
+            error=str(e),
+        )
+        raise SystemExit(2)

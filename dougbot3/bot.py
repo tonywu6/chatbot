@@ -14,6 +14,7 @@ from loguru import logger
 from dougbot3 import modules
 from dougbot3.errors import ErrorView, report_error
 from dougbot3.settings import BotSettings
+from dougbot3.utils.config import load_settings
 
 
 def find_extensions(entry: ModuleType) -> frozenset[str]:
@@ -49,7 +50,7 @@ async def load_all_extensions(bot: Bot, extensions: Iterable[str]) -> None:
 
 
 async def create_bot():
-    settings = BotSettings()
+    settings = load_settings(BotSettings)
     options = settings.bot_options.dict()
 
     bot = Bot(**options)

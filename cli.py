@@ -7,6 +7,7 @@ from loguru import logger
 
 from dougbot3.bot import create_bot
 from dougbot3.settings import AppSecrets
+from dougbot3.utils.config import load_settings
 from dougbot3.utils.logging import configure_logging
 
 
@@ -40,8 +41,9 @@ def run(autoreload: bool = False):
 
     async def main():
         bot = await create_bot()
+        secrets = load_settings(AppSecrets)
         async with bot:
-            await bot.start(AppSecrets().get_bot_token())
+            await bot.start(secrets.get_bot_token())
 
     with suppress(KeyboardInterrupt):
         asyncio.run(main())
@@ -51,8 +53,9 @@ def run(autoreload: bool = False):
 def sync_commands():
     async def main():
         bot = await create_bot()
+        secrets = load_settings(AppSecrets)
         async with bot:
-            await bot.login(AppSecrets().get_bot_token())
+            await bot.login(secrets.get_bot_token())
             await bot.tree.sync()
 
     asyncio.run(main())
