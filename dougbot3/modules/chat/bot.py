@@ -36,6 +36,9 @@ from dougbot3.utils.discord.ui import DefaultView
 CHAT_OPTIONS = load_settings(ChatOptions)
 
 CHAT_PRESETS: dict[str, list[ChatMessage]] = {
+    "Discord bot": [
+        ChatMessage(role="system", content="Your name is ${assistant}. ${discord}.")
+    ],
     "Insightful assistant": [
         ChatMessage(
             role="system",
