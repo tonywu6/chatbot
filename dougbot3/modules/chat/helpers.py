@@ -78,7 +78,8 @@ class IdempotentTasks:
             except asyncio.CancelledError:
                 pass
             except Exception as e:
-                task.resolution.set_exception(e)
+                if not task.resolution.done():
+                    task.resolution.set_exception(e)
                 task.finished.set()
 
         execution = asyncio.create_task(awaitable)

@@ -1,6 +1,7 @@
+from string import Template
 from typing import Optional
 
-import openai
+import arrow
 import orjson
 from discord import (
     ButtonStyle,
@@ -18,32 +19,38 @@ from discord.ext.commands import Bot, Cog, UserInputError
 from discord.ui import Button, View, button
 from faker import Faker
 from loguru import logger
+from more_itertools import first
 
 from dougbot3.errors import report_error
 from dougbot3.modules.chat.controller import ChatController
-from dougbot3.modules.chat.helpers import (
-    is_system_message,
-    system_message,
-    token_limit_warning,
-)
+from dougbot3.modules.chat.helpers import is_system_message, system_message
 from dougbot3.modules.chat.models import ChatCompletionRequest, ChatMessage, ChatModel
 from dougbot3.modules.chat.session import ChatSession
 from dougbot3.modules.chat.settings import ChatOptions
-from dougbot3.settings import AppSecrets
 from dougbot3.utils.config import load_settings
 from dougbot3.utils.discord import Embed2
 from dougbot3.utils.discord.color import Color2
 from dougbot3.utils.discord.file import discord_open
 from dougbot3.utils.discord.transform import KeyOf
 
-SECRETS = load_settings(AppSecrets)
 CHAT_OPTIONS = load_settings(ChatOptions)
 
 CHAT_PRESETS: dict[str, list[ChatMessage]] = {
-    "Helpful assistant": [
+    "Insightful assistant": [
         ChatMessage(
             role="system",
-            content="%(environment)s. You are an helpful assistant.",
+            content="You are an insightful assistant."
+            " You like to provide detailed responses to questions."
+            " Your name is ${assistant}. ${discord}.",
+        )
+    ],
+    "ChatGPT": [
+        ChatMessage(
+            role="system",
+            content="You are ChatGPT, a large language model trained by OpenAI."
+            " Answer as concisely as possible."
+            " You are answering questions from ${user} over Discord."
+            " Current date: ${current_date}",
         )
     ],
     "Empty": [],
@@ -59,7 +66,6 @@ class ManageChatView(View):
 
     @button(
         label="Export session",
-        style=ButtonStyle.blurple,
         custom_id="manage_chat:export_session",
     )
     async def export_session(self, interaction: Interaction, button: Button = None):
@@ -76,6 +82,21 @@ class ManageChatView(View):
             stream.write(orjson.dumps(request, option=orjson.OPT_INDENT_2))
 
         await interaction.followup.send(file=file, ephemeral=True)
+
+    @button(label="Rename thread", custom_id="manage_chat:rename_thread")
+    async def rename_thread(self, interaction: Interaction, button: Button = None):
+        channel = interaction.channel
+        if not isinstance(channel, Thread):
+            return
+
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        session = await self.controller.ensure_session(channel)
+
+        title = await session.write_title()
+        if title:
+            await channel.edit(name=title)
+
+        await interaction.delete_original_response()
 
     @button(
         label="Rebuild history",
@@ -106,6 +127,9 @@ class ManageChatView(View):
         self.controller.delete_session(channel)
         logger.info("Chat {0}: ended.", channel.mention)
 
+    async def on_error(self, interaction: Interaction, error: Exception, item) -> None:
+        return await report_error(error, messageable=interaction.channel)
+
 
 class ChatCommands(Cog):
     def __init__(self, bot: Bot) -> None:
@@ -119,6 +143,7 @@ class ChatCommands(Cog):
     @describe(
         preset="Include predefined initial messages.",
         model="The GPT model to use.",
+        system_message="Provide a custom system message.",
     )
     @choices()
     @guild_only()
@@ -131,7 +156,7 @@ class ChatCommands(Cog):
     async def chat(
         self,
         interaction: Interaction,
-        preset: KeyOf[CHAT_PRESETS] = "Helpful assistant",
+        preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),
         system_message: Optional[str] = None,
         model: ChatModel = "gpt-3.5-turbo-0301",
         temperature: float = 0.7,
@@ -159,22 +184,30 @@ class ChatCommands(Cog):
         if max_tokens <= 0:
             max_tokens = None
 
-        environment_info = (
-            f"You are {self.bot.user.mention}"
-            f" talking to {interaction.user.mention} over Discord."
-            f" Server name: {interaction.guild.name}."
-            f" Channel name: {thread_name}"
-        )
-        substitutions = {"environment": environment_info}
+        env = {
+            "assistant": self.bot.user.mention,
+            "user": interaction.user.mention,
+            "server": interaction.guild.name,
+            "channel": thread.mention,
+            "current_date": arrow.now().isoformat(),
+        }
+        env["discord"] = (
+            "You are talking to {user} over Discord."
+            " Server name: {server}."
+            " Channel: {channel}."
+            " Current date: {current_date}"
+        ).format(**env)
+
         preset_dialog = []
         if system_message:
+            tmpl = Template(system_message)
             preset_dialog = [
-                ChatMessage(role="system", content=system_message % substitutions)
+                ChatMessage(role="system", content=tmpl.safe_substitute(env))
             ]
         else:
             preset_dialog = [
-                message.copy(update={"content": message.content % substitutions})
-                for message in CHAT_PRESETS.get(preset, [])
+                m.copy(update={"content": Template(m.content).safe_substitute(env)})
+                for m in CHAT_PRESETS.get(preset, [])
             ]
 
         request = ChatCompletionRequest(
@@ -208,8 +241,6 @@ class ChatCommands(Cog):
             view=helper,
             ephemeral=True,
         )
-
-    # TODO: starting system message, thread rename, summary, deferred response
 
     async def _delete_messages(self, channel_id: int, *message_ids: int):
         thread = self.bot.get_channel(channel_id)
@@ -250,31 +281,7 @@ class ChatCommands(Cog):
         except UserInputError:
             return
 
-        await session.process_request(message)
-
-        if message.author.mention != session.atom.user:
-            return
-
-        async with thread.typing():
-            logger.info("Chat {0}: sending API request", thread.mention)
-
-            try:
-                response = await openai.ChatCompletion.acreate(
-                    **session.to_request().dict(),
-                    api_key=SECRETS.OPENAI_TOKEN.get_secret_value(),
-                )
-            except Exception as e:
-                await report_error(e, bot=self.bot, messageable=thread)
-                return
-
-            replies = session.prepare_replies(response)
-            for reply in replies:
-                await thread.send(**reply)
-
-            logger.info("Chat {0}: resolved {1} replies", thread.mention, len(replies))
-
-        if warning := token_limit_warning(session.usage, session.atom.model):
-            await thread.send(embed=warning)
+        await session.answer(message)
 
 
 async def setup(bot: Bot) -> None:

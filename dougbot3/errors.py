@@ -24,6 +24,9 @@ class ErrorView(View):
             return
         await interaction.message.delete()
 
+    async def on_error(self, interaction: Interaction, error: Exception, item) -> None:
+        return await report_error(error, messageable=interaction.channel)
+
 
 async def report_error(
     error: Exception,
@@ -46,6 +49,9 @@ async def report_error(
         case discord_errors.Forbidden():
             color = Color2.red()
             title = "HTTP 403 Forbidden"
+        case discord_errors.NotFound():
+            color = Color2.dark_gray()
+            title = "HTTP 404 Forbidden"
         case (
             ext_cmd_errors.CommandOnCooldown()
             | ext_cmd_errors.MaxConcurrencyReached()
