@@ -50,6 +50,12 @@ class IdempotentTasks:
     def __init__(self) -> None:
         self.tasks: dict[Any, PendingTask] = {}
 
+    def cancel(self, key: Any):
+        task = self.tasks.get(key)
+        if task is None or task.execution is None:
+            return
+        task.execution.cancel()
+
     async def run(self, key: Any, awaitable: Awaitable[T]) -> T:
         if key not in self.tasks:
             task = PendingTask(

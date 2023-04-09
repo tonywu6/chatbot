@@ -7,18 +7,22 @@ from dougbot3.modules.chat.session import ChatSession
 
 class ChatController:
     def __init__(self):
-        self.sessions: dict[int, ChatSession] = {}
+        self.sessions: dict[Thread, ChatSession] = {}
         self._invalid_threads = set[int]()
         self._pending_threads = IdempotentTasks()
 
     def get_session(self, thread: Thread):
-        return self.sessions.get(thread.id)
+        return self.sessions.get(thread)
 
     def set_session(self, thread: Thread, chain: ChatSession):
-        self.sessions[thread.id] = chain
+        self.delete_session(thread)
+        self.sessions[thread] = chain
 
     def delete_session(self, thread: Thread):
-        self.sessions.pop(thread.id, None)
+        session = self.sessions.pop(thread, None)
+        if session is not None:
+            self._pending_threads.cancel(thread)
+        return session
 
     async def ensure_session(self, thread: Thread, *, refresh=False, verbose=False):
         session = self.get_session(thread)
@@ -26,7 +30,7 @@ class ChatController:
         if session and not refresh:
             return session
 
-        if thread.id in self._invalid_threads:
+        if thread in self._invalid_threads:
             raise UserInputError("Invalid chat thread.")
 
         if verbose:
@@ -34,10 +38,10 @@ class ChatController:
             await thread.send(embed=notice)
 
         task = ChatSession.from_thread(thread)
-        session = await self._pending_threads.run(thread.id, task)
+        session = await self._pending_threads.run(thread, task)
 
         if not session:
-            self._invalid_threads.add(thread.id)
+            self._invalid_threads.add(thread)
             raise UserInputError("Could not find params for this chat.")
 
         self.set_session(thread, session)

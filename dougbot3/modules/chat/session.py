@@ -123,7 +123,7 @@ class ChatSession:
         )
 
     @classmethod
-    async def parse_discord_message(
+    async def parse_message(
         cls,
         user: str,
         assistant: str,
@@ -164,6 +164,17 @@ class ChatSession:
 
         return messages
 
+    async def splice_messages(self, delete: int, insert: Message | None = None) -> None:
+        index = [i for i, m in enumerate(self.messages) if m.message_id == delete]
+        if insert:
+            updated = await self.parse_message(self.atom.user, self.assistant, insert)
+        else:
+            updated = []
+        if not index:
+            self.messages.extend(updated)
+        else:
+            self.messages[min(index) : max(index) + 1] = updated
+
     async def process_request(self, message: Message) -> None:
         """Parse a Discord message and add it to the chain.
 
@@ -175,15 +186,8 @@ class ChatSession:
         :param message: a Discord Message object
         :type message: Message
         """
-        if any(message.id == m.message_id for m in self.messages):
-            return
         async with self._processing:
-            messages = await self.parse_discord_message(
-                self.atom.user,
-                self.assistant,
-                message,
-            )
-            self.messages.extend(messages)
+            await self.splice_messages(message.id, message)
 
     def prepare_replies(self, response: ChatCompletionResponse) -> list[DiscordMessage]:
         """Parse an API response into a list of Discord messages.
@@ -264,10 +268,6 @@ class ChatSession:
             results.append({"embeds": [warning]})
 
         return results
-
-    def remove_messages(self, message_id: int) -> None:
-        index = [i for i, m in enumerate(self.messages) if m.message_id == message_id]
-        self.messages[min(index) : max(index) + 1] = []
 
     def to_request(self) -> ChatCompletionRequest:
         request = self.atom.copy()

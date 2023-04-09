@@ -1,6 +1,15 @@
 import openai
 import orjson
-from discord import ButtonStyle, ChannelType, Interaction, Message, TextChannel, Thread
+from discord import (
+    ButtonStyle,
+    ChannelType,
+    Interaction,
+    Message,
+    RawBulkMessageDeleteEvent,
+    RawMessageDeleteEvent,
+    TextChannel,
+    Thread,
+)
 from discord.app_commands import choices, command, describe, guild_only
 from discord.app_commands.checks import bot_has_permissions
 from discord.ext.commands import Bot, Cog, UserInputError
@@ -162,7 +171,31 @@ class ChatCommands(Cog):
             ephemeral=True,
         )
 
-    # TODO: message delete, message edit, starting system message, thread rename, summary, deferred response
+    # TODO: starting system message, thread rename, summary, deferred response
+
+    async def _delete_messages(self, channel_id: int, *message_ids: int):
+        thread = self.bot.get_channel(channel_id)
+        session = self.controller.get_session(thread)
+        if not session:
+            return
+        for message in message_ids:
+            await session.splice_messages(message)
+
+    @Cog.listener("on_raw_message_delete")
+    async def on_raw_message_delete(self, payload: RawMessageDeleteEvent):
+        await self._delete_messages(payload.channel_id, payload.message_id)
+
+    @Cog.listener("on_raw_bulk_message_delete")
+    async def on_raw_bulk_message_delete(self, payload: RawBulkMessageDeleteEvent):
+        await self._delete_messages(payload.channel_id, *payload.message_ids)
+
+    @Cog.listener("on_message_edit")
+    async def on_message_edit(self, before: Message, after: Message):
+        thread = after.channel
+        session = self.controller.get_session(thread)
+        if not session:
+            return
+        await session.splice_messages(before.id, after)
 
     @Cog.listener("on_message")
     async def on_message(self, message: Message):
