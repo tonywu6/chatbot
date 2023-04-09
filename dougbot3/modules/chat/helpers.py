@@ -16,10 +16,10 @@ def system_message():
 
 
 def is_system_message(message: Message):
-    if not message.embeds:
-        return False
-    embed = message.embeds[0]
-    return bool(embed.footer and embed.footer.text == "System message")
+    return any(
+        embed.footer and embed.footer.text == "System message"
+        for embed in message.embeds
+    )
 
 
 def token_limit_warning(usage: int, model: ChatModel):

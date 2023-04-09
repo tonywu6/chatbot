@@ -12,9 +12,10 @@ from discord.utils import oauth_url
 from loguru import logger
 
 from dougbot3 import modules
-from dougbot3.errors import ErrorView, report_error
 from dougbot3.settings import BotSettings
 from dougbot3.utils.config import load_settings
+from dougbot3.utils.discord.ui import ErrorReportView
+from dougbot3.utils.errors import report_error
 
 BOT_SETTINGS = load_settings(BotSettings)
 
@@ -76,6 +77,6 @@ async def create_bot():
     async def on_command_error(ctx: Context, error: CommandError):
         await report_error(error, bot=bot, messageable=ctx)
 
-    bot.add_view(ErrorView())
+    bot.add_view(ErrorReportView())
 
     return bot

@@ -9,7 +9,6 @@ from markdown_it import MarkdownIt
 from markdown_it.tree import SyntaxTreeNode
 from more_itertools import constrained_batches, first, split_at
 
-from dougbot3.errors import report_error
 from dougbot3.modules.chat.helpers import (
     is_system_message,
     system_message,
@@ -28,6 +27,7 @@ from dougbot3.utils.discord.color import Color2
 from dougbot3.utils.discord.embed import Embed2, EmbedReader
 from dougbot3.utils.discord.file import discord_open
 from dougbot3.utils.discord.markdown import divide_text, pre
+from dougbot3.utils.errors import report_error
 
 SECRETS = load_settings(AppSecrets)
 

@@ -9,7 +9,8 @@ from discord.ext.commands import Bot, Cog
 from dougbot3.utils.datetime import utcnow
 from dougbot3.utils.discord.embed import Embed2
 from dougbot3.utils.discord.file import discord_open
-from dougbot3.utils.discord.markdown import code
+from dougbot3.utils.discord.markdown import code, pre
+from dougbot3.utils.errors import unbound_error_handler
 
 
 class DebugCommands(Cog):
@@ -58,7 +59,18 @@ class DebugCommands(Cog):
             return psutil.Process(os.getpid()).send_signal(signal)
 
 
-@context_menu(name="Serialize message")
+@context_menu(name="Debug: Embed as Markdown")
+async def embed_as_markdown(interaction: Interaction, message: Message):
+    if not message.embeds:
+        return
+    docs = [pre(str(Embed2.upgrade(e)), "md") for e in message.embeds]
+    await interaction.response.send_message("\n".join(docs))
+
+
+embed_as_markdown.error(unbound_error_handler)
+
+
+@context_menu(name="Debug: Serialize message")
 async def serialize_message(interaction: Interaction, message: Message):
     info = {
         "id": message.id,
@@ -90,6 +102,10 @@ async def serialize_message(interaction: Interaction, message: Message):
     await interaction.response.send_message(files=[file], ephemeral=True)
 
 
+serialize_message.error(unbound_error_handler)
+
+
 async def setup(bot: Bot) -> None:
     bot.tree.add_command(serialize_message)
+    bot.tree.add_command(embed_as_markdown)
     await bot.add_cog(DebugCommands(bot))

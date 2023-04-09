@@ -16,12 +16,11 @@ from discord import (
 from discord.app_commands import choices, command, describe, guild_only
 from discord.app_commands.checks import bot_has_permissions
 from discord.ext.commands import Bot, Cog, UserInputError
-from discord.ui import Button, View, button
+from discord.ui import Button, button
 from faker import Faker
 from loguru import logger
 from more_itertools import first
 
-from dougbot3.errors import report_error
 from dougbot3.modules.chat.controller import ChatController
 from dougbot3.modules.chat.helpers import is_system_message, system_message
 from dougbot3.modules.chat.models import ChatCompletionRequest, ChatMessage, ChatModel
@@ -32,6 +31,7 @@ from dougbot3.utils.discord import Embed2
 from dougbot3.utils.discord.color import Color2
 from dougbot3.utils.discord.file import discord_open
 from dougbot3.utils.discord.transform import KeyOf
+from dougbot3.utils.discord.ui import DefaultView
 
 CHAT_OPTIONS = load_settings(ChatOptions)
 
@@ -58,7 +58,7 @@ CHAT_PRESETS: dict[str, list[ChatMessage]] = {
 }
 
 
-class ManageChatView(View):
+class ManageChatView(DefaultView):
     def __init__(self, bot: Bot, controller: ChatController = None):
         super().__init__(timeout=None)
         self.bot = bot
@@ -126,9 +126,6 @@ class ManageChatView(View):
         await channel.delete()
         self.controller.delete_session(channel)
         logger.info("Chat {0}: ended.", channel.mention)
-
-    async def on_error(self, interaction: Interaction, error: Exception, item) -> None:
-        return await report_error(error, messageable=interaction.channel)
 
 
 class ChatCommands(Cog):
