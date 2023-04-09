@@ -6,6 +6,11 @@ from pydantic import BaseModel, Field
 
 ChatModel = Literal["gpt-3.5-turbo", "gpt-3.5-turbo-0301"]
 
+CHAT_MODEL_TOKEN_LIMITS: dict[ChatModel, int] = {
+    "gpt-3.5-turbo": 4096,
+    "gpt-3.5-turbo-0301": 4096,
+}
+
 
 class ChatCompletionChoiceMessage(TypedDict):
     role: Literal["system", "user", "assistant"]

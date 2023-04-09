@@ -23,7 +23,7 @@ from dougbot3.utils.discord.markdown import divide_text, pre
 MAX_MESSAGE_LENGTH = 1996
 
 
-class ChatMessageChain:
+class ChatSession:
     def __init__(
         self,
         request: ChatCompletionRequest,
@@ -38,7 +38,7 @@ class ChatMessageChain:
         self._processing = asyncio.Lock()
 
     @classmethod
-    async def from_thread(cls, thread: Thread, cancelled: asyncio.Event | None = None):
+    async def from_thread(cls, thread: Thread):
         logger.info("Chat {0}: Rebuilding history", thread.mention)
 
         def get_parameters(message: Message):
@@ -56,9 +56,6 @@ class ChatMessageChain:
         session: cls | None = None
 
         async for message in thread.history(oldest_first=True):
-            if cancelled and cancelled.is_set():
-                raise asyncio.CancelledError()
-
             if session:
                 await session.process_request(message)
                 continue
@@ -178,6 +175,8 @@ class ChatMessageChain:
         :param message: a Discord Message object
         :type message: Message
         """
+        if any(message.id == m.message_id for m in self.messages):
+            return
         async with self._processing:
             messages = await self.parse_discord_message(
                 self.atom.user,
@@ -266,14 +265,9 @@ class ChatMessageChain:
 
         return results
 
-    def remove_messages(self, *message_ids: int) -> None:
-        filtered = [
-            message
-            for message in self.messages
-            if not message.message_id or message.message_id not in message_ids
-        ]
-        self.messages.clear()
-        self.messages.extend(filtered)
+    def remove_messages(self, message_id: int) -> None:
+        index = [i for i, m in enumerate(self.messages) if m.message_id == message_id]
+        self.messages[min(index) : max(index) + 1] = []
 
     def to_request(self) -> ChatCompletionRequest:
         request = self.atom.copy()

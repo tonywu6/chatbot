@@ -1,6 +1,5 @@
-import asyncio
-
 import openai
+import orjson
 from discord import ButtonStyle, ChannelType, Interaction, Message, TextChannel, Thread
 from discord.app_commands import choices, command, describe, guild_only
 from discord.app_commands.checks import bot_has_permissions
@@ -10,40 +9,67 @@ from faker import Faker
 from loguru import logger
 
 from dougbot3.errors import report_error
+from dougbot3.modules.chat.controller import ChatController
 from dougbot3.modules.chat.helpers import (
-    Cancellation,
     is_system_message,
     system_message,
     token_limit_warning,
 )
 from dougbot3.modules.chat.models import ChatCompletionRequest, ChatModel
-from dougbot3.modules.chat.session import ChatMessageChain
+from dougbot3.modules.chat.session import ChatSession
 from dougbot3.modules.chat.settings import ChatOptions
 from dougbot3.settings import AppSecrets
 from dougbot3.utils.discord import Embed2
 from dougbot3.utils.discord.color import Color2
+from dougbot3.utils.discord.file import discord_open
 from dougbot3.utils.discord.transform import literal_choices
 
 
-class ChatSessions:
-    def __init__(self):
-        self.sessions: dict[int, ChatMessageChain] = {}
-
-    def get_session(self, thread: Thread):
-        return self.sessions.get(thread.id)
-
-    def set_session(self, thread: Thread, chain: ChatMessageChain):
-        self.sessions[thread.id] = chain
-
-    def delete_session(self, thread: Thread):
-        self.sessions.pop(thread.id, None)
-
-
 class ManageChatView(View):
-    def __init__(self, bot: Bot, sessions: ChatSessions = None):
+    def __init__(self, bot: Bot, controller: ChatController = None):
         super().__init__(timeout=None)
         self.bot = bot
-        self.sessions = sessions or ChatSessions()
+        self.controller = controller or ChatController()
+
+    @button(
+        label="Export request",
+        style=ButtonStyle.blurple,
+        custom_id="manage_chat:export_request",
+    )
+    async def export_request(self, interaction: Interaction, button: Button = None):
+        channel = interaction.channel
+        if not isinstance(channel, Thread):
+            return
+
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        session = await self.controller.ensure_session(channel)
+
+        request = session.to_request().dict()
+
+        with discord_open("request.json") as (stream, file):
+            stream.write(orjson.dumps(request, option=orjson.OPT_INDENT_2))
+
+        await interaction.followup.send(file=file, ephemeral=True)
+
+    @button(
+        label="Rebuild history",
+        custom_id="manage_chat:rebuild_history",
+    )
+    async def rebuild_history(self, interaction: Interaction, button: Button = None):
+        channel = interaction.channel
+        if not isinstance(channel, Thread):
+            return
+
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        session = await self.controller.ensure_session(channel, refresh=True)
+
+        result = (
+            system_message()
+            .set_title("Done rebuilding history")
+            .set_color(Color2.teal())
+            .set_description(f"Collected {len(session.messages)} messages")
+        )
+        await interaction.followup.send(embed=result, ephemeral=True)
 
     @button(label="End chat", style=ButtonStyle.red, custom_id="manage_chat:end_chat")
     async def end_chat(self, interaction: Interaction, button: Button = None):
@@ -51,41 +77,8 @@ class ManageChatView(View):
         if not channel:
             return
         await channel.delete()
-        self.sessions.delete_session(channel)
+        self.controller.delete_session(channel)
         logger.info("Chat {0}: ended.", channel.mention)
-
-    @button(
-        label="Rebuild history",
-        style=ButtonStyle.blurple,
-        custom_id="manage_chat:rebuild_history",
-    )
-    async def rebuild_history(self, interaction: Interaction, button: Button = None):
-        channel = interaction.channel
-
-        if not isinstance(channel, Thread):
-            return
-
-        await interaction.response.defer(thinking=True, ephemeral=True)
-
-        session = await ChatMessageChain.from_thread(channel)
-
-        if not session:
-            raise UserInputError(
-                "Could not find the original session params for this chat."
-                "\nThe message may have been deleted. Unfortunately, this means"
-                " you can no longer have conversation in this thread."
-            )
-
-        self.sessions.set_session(channel, session)
-
-        result = (
-            Embed2()
-            .set_title("Done rebuilding history")
-            .set_color(Color2.teal())
-            .set_description(f"Collected {len(session.messages)} messages")
-        )
-
-        await interaction.followup.send(embed=result, ephemeral=True)
 
 
 class ChatCommands(Cog):
@@ -93,13 +86,11 @@ class ChatCommands(Cog):
         self.options = ChatOptions()
         self._api_key = AppSecrets().OPENAI_TOKEN
 
-        self.sessions = ChatSessions()
+        self.controller = ChatController()
         self.bot = bot
-        self.bot.add_view(ManageChatView(self.bot, self.sessions))
+        self.bot.add_view(ManageChatView(self.bot, self.controller))
 
         self._fake = Faker("en-US")
-        self._invalid_threads = set[int]()
-        self._cancellation = Cancellation()
 
     @command(name="chat", description="Start a chat thread with the bot.")
     @describe(model="The GPT model to use.")
@@ -146,11 +137,11 @@ class ChatCommands(Cog):
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        session = ChatMessageChain(request=request, assistant=self.bot.user.mention)
+        session = ChatSession(request=request, assistant=self.bot.user.mention)
 
         await thread.send(
             embed=session.to_atom(),
-            view=ManageChatView(self.bot, self.sessions),
+            view=ManageChatView(self.bot, self.controller),
         )
         await thread.add_user(interaction.user)
 
@@ -160,23 +151,9 @@ class ChatCommands(Cog):
         if not isinstance(interaction.channel, Thread):
             raise UserInputError("This command can only be used in a thread.")
 
-        session = self.sessions.get_session(interaction.channel)
-        helper = ManageChatView(self.bot, self.sessions)
+        session = await self.controller.ensure_session(interaction.channel)
 
-        if not session:
-            report = (
-                Embed2()
-                .set_color(Color2.dark_orange())
-                .set_title("Chat history not found in cache.")
-                .set_description("Rebuild it, then try again.")
-            )
-            await interaction.response.send_message(
-                view=helper,
-                embed=report,
-                ephemeral=True,
-            )
-            return
-
+        helper = ManageChatView(self.bot, self.controller)
         report = session.to_atom().set_timestamp()
 
         await interaction.response.send_message(
@@ -185,36 +162,24 @@ class ChatCommands(Cog):
             ephemeral=True,
         )
 
+    # TODO: message delete, message edit, starting system message, thread rename, summary, deferred response
+
     @Cog.listener("on_message")
     async def on_message(self, message: Message):
         if is_system_message(message):
             return
 
         thread = message.channel
-        if not isinstance(thread, Thread) or thread.id in self._invalid_threads:
+        if not isinstance(thread, Thread):
             return
 
-        session = self.sessions.get_session(thread)
+        try:
+            send_notice = not message.author.bot
+            session = await self.controller.ensure_session(thread, verbose=send_notice)
+        except UserInputError:
+            return
 
-        if session:
-            await session.process_request(message)
-
-        else:
-            if not message.author.bot:
-                notice = system_message().set_description("Rebuilding chat history ...")
-                await thread.send(embed=notice)
-
-            try:
-                token = self._cancellation.supersede(thread.id)
-                session = await ChatMessageChain.from_thread(thread, token)
-            except asyncio.CancelledError:
-                return
-
-            if not session:
-                self._invalid_threads.add(thread.id)
-                return
-
-            self.sessions.set_session(thread, session)
+        await session.process_request(message)
 
         if message.author.mention != session.atom.user:
             return

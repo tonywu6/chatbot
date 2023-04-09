@@ -1,11 +1,14 @@
 import asyncio
-from typing import Any
+from typing import Any, Awaitable, Generic, Optional, TypeVar
 
+from attr import dataclass
 from discord import Message
 
-from dougbot3.modules.chat.models import ChatModel
+from dougbot3.modules.chat.models import CHAT_MODEL_TOKEN_LIMITS, ChatModel
 from dougbot3.utils.discord.color import Color2
 from dougbot3.utils.discord.embed import Embed2
+
+T = TypeVar("T")
 
 
 def system_message():
@@ -20,13 +23,9 @@ def is_system_message(message: Message):
 
 
 def token_limit_warning(usage: int, model: ChatModel):
-    limits: dict[ChatModel, int] = {
-        "gpt-3.5-turbo": 4096,
-        "gpt-3.5-turbo-0301": 4096,
-    }
-    if model not in limits:
+    if model not in CHAT_MODEL_TOKEN_LIMITS:
         return None
-    limit = limits[model]
+    limit = CHAT_MODEL_TOKEN_LIMITS[model]
     percentage = usage / limit
     if percentage > 0.75:
         return (
@@ -40,16 +39,45 @@ def token_limit_warning(usage: int, model: ChatModel):
         )
 
 
-class Cancellation:
+@dataclass
+class PendingTask(Generic[T]):
+    execution: Optional[asyncio.Task]
+    resolution: asyncio.Future[T]
+    finished: asyncio.Event
+
+
+class IdempotentTasks:
     def __init__(self) -> None:
-        self.tokens: dict[Any, asyncio.Event] = {}
+        self.tasks: dict[Any, PendingTask] = {}
 
-    def cancel(self, key: Any):
-        token = self.tokens.pop(key, None)
-        if token:
-            token.set()
+    async def run(self, key: Any, awaitable: Awaitable[T]) -> T:
+        if key not in self.tasks:
+            task = PendingTask(
+                execution=None,
+                resolution=asyncio.Future(),
+                finished=asyncio.Event(),
+            )
+            self.tasks[key] = task
 
-    def supersede(self, key: Any):
-        self.cancel(key)
-        self.tokens[key] = token = asyncio.Event()
-        return token
+        else:
+            task = self.tasks[key]
+
+        if task.execution is not None:
+            task.execution.cancel()
+
+        def on_finish(execution: asyncio.Task):
+            try:
+                task.resolution.set_result(execution.result())
+                task.finished.set()
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                task.resolution.set_exception(e)
+                task.finished.set()
+
+        execution = asyncio.create_task(awaitable)
+        execution.add_done_callback(on_finish)
+        task.execution = execution
+
+        await task.finished.wait()
+        return task.resolution.result()
