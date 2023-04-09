@@ -13,6 +13,10 @@ python cli.py run
 
 ## Features
 
+### Rich content
+
+Text attachments will have their content included.
+
 Embeds are sent as a Markdown document, for example:
 
 ```md
@@ -28,15 +32,28 @@ type: article
 The most prominent strain of A.I. encodes a flawed conception of language and knowledge.
 ```
 
-Text attachments will have their content included.
+### Multiple participants
 
 The bot listens to other users as well (including other bots). In the request, messages from other users will look like
 
 ```json
 {
   "role": "user",
-  "content": "<@user_mention>: Hello, ChatGPT!"
+  "content": "<@user_mention> says: Hello, ChatGPT!"
 }
 ```
 
-Currently only messages from you will trigger a response.
+By default, the bot will respond after every message from the user who started the thread. Use the `timing` option to control who the bot will respond to (you, any human, anyone including bots), and when (after every message, only when mentioned).
+
+### Presets
+
+By default, the following system message is included at the beginning the request:
+
+```json
+{
+  "role": "system",
+  "content": "Your name is {bot_name}. You are talking to {user} over Discord. Server name: {server}. Channel: {channel}. Current date: {current_date}"
+}
+```
+
+Use the `preset` option to choose other presets, or use the `system_message` option to write your own.

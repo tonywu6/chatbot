@@ -17,9 +17,12 @@ from dougbot3.modules.chat.helpers import (
 from dougbot3.modules.chat.models import (
     ChatCompletionRequest,
     ChatCompletionResponse,
+    ChatFeatures,
     ChatMessage,
     ChatMessageType,
     DiscordMessage,
+    TriggerMessage,
+    TriggerTiming,
 )
 from dougbot3.settings import AppSecrets
 from dougbot3.utils.config import load_settings
@@ -37,11 +40,13 @@ MAX_MESSAGE_LENGTH = 1996
 class ChatSession:
     def __init__(
         self,
-        request: ChatCompletionRequest,
         assistant: str,
+        request: ChatCompletionRequest,
+        features: ChatFeatures = ChatFeatures(),
     ):
         self.atom = request
         self.assistant = assistant
+        self.features = features
 
         self.messages: list[ChatMessage] = []
         self.usage: int = -1
@@ -59,10 +64,16 @@ class ChatSession:
             default_flow_style=False,
             sort_keys=False,
         )
+        features = yaml.safe_dump(
+            self.features.dict(),
+            default_flow_style=False,
+            sort_keys=False,
+        )
         report = (
             system_message()
             .set_title("Chat session")
             .add_field("Parameters", pre(params, "yaml"))
+            .add_field("Features", pre(features, "yaml"))
             .add_field("Token usage", self.usage)
         )
         return report
@@ -82,12 +93,13 @@ class ChatSession:
                 reader = EmbedReader(embed)
                 params = reader["Parameters"]
                 atom = ChatCompletionRequest(**params)
+                features = ChatFeatures(**reader.get("Features", {}))
             except LookupError:
                 logger.info("Chat {0}: not a valid thread", thread.mention)
                 raise ValueError
             else:
                 logger.info("Found atom: {0}", atom)
-                return atom
+                return atom, features
 
         session: cls | None = None
 
@@ -97,9 +109,9 @@ class ChatSession:
                 continue
 
             try:
-                atom = get_parameters(message)
+                atom, features = get_parameters(message)
                 assistant = message.author.mention
-                session = cls(request=atom, assistant=assistant)
+                session = cls(assistant=assistant, request=atom, features=features)
             except ValueError:
                 return None
 
@@ -188,7 +200,7 @@ class ChatSession:
         if message.content:
             content = message.content
             if author.mention != user and author.mention != assistant:
-                content = f"{author.mention}: {content}"
+                content = f"{author.mention} says: {content}"
             messages.append(ChatMessage(role=role, content=content))
 
         for embed in message.embeds:
@@ -340,8 +352,14 @@ class ChatSession:
         return None
 
     def should_answer(self, message: Message):
-        # TODO: deferred response
-        return message.author.mention == self.atom.user
+        result = not message.author.mention == self.assistant
+        if self.features.timing & TriggerTiming.ON_MENTION.value:
+            result = result and self.assistant in [m.mention for m in message.mentions]
+        if self.features.timing & TriggerMessage.FROM_INITIATOR.value:
+            result = result and message.author.mention == self.atom.user
+        elif self.features.timing & TriggerMessage.FROM_HUMAN.value:
+            result = result and not message.author.bot
+        return result
 
     @asynccontextmanager
     async def maybe_update_title(self, channel: Thread):

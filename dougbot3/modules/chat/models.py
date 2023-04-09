@@ -4,6 +4,8 @@ from typing import Literal, Optional, TypedDict
 from discord import Embed, File
 from pydantic import BaseModel, Field
 
+from dougbot3.utils.discord.transform import dict_choices
+
 ChatModel = Literal["gpt-3.5-turbo", "gpt-3.5-turbo-0301"]
 
 CHAT_MODEL_TOKEN_LIMITS: dict[ChatModel, int] = {
@@ -68,3 +70,38 @@ class DiscordMessage(TypedDict):
     content: Optional[str]
     embeds: Optional[list[Embed]]
     files: Optional[list[File]]
+
+
+class TriggerTiming(Enum):
+    IMMEDIATELY = 1 << 1
+    ON_MENTION = 1 << 2
+
+
+class TriggerMessage(Enum):
+    ANY_MESSAGE = 1 << 3
+    FROM_HUMAN = 1 << 4
+    FROM_INITIATOR = 1 << 5
+
+
+_TIMINGS = {
+    "any message, immediately": TriggerMessage.ANY_MESSAGE.value
+    | TriggerTiming.IMMEDIATELY.value,
+    "messages from any human, immediately": TriggerMessage.FROM_HUMAN.value
+    | TriggerTiming.IMMEDIATELY.value,
+    "messages from you, immediately": TriggerMessage.FROM_INITIATOR.value
+    | TriggerTiming.IMMEDIATELY.value,
+    "any message, only when the bot is mentioned": TriggerMessage.ANY_MESSAGE.value
+    | TriggerTiming.ON_MENTION.value,
+    "messages from any human, only when the bot is mentioned": TriggerMessage.FROM_HUMAN.value
+    | TriggerTiming.ON_MENTION.value,
+    "messages from you, only when the bot is mentioned": TriggerMessage.FROM_INITIATOR.value
+    | TriggerTiming.ON_MENTION.value,
+}
+
+REQUEST_TIMINGS = dict_choices(_TIMINGS)
+
+DEFAULT_REQUEST_TIMING = _TIMINGS["messages from you, immediately"]
+
+
+class ChatFeatures(BaseModel):
+    timing: int = DEFAULT_REQUEST_TIMING

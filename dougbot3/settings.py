@@ -1,7 +1,6 @@
 from typing import Callable
 
-from discord import AllowedMentions, Intents, Message
-from discord.ext.commands import Bot
+from discord import AllowedMentions, Intents
 from pydantic import BaseModel, BaseSettings, SecretStr
 
 from dougbot3.utils.config import use_settings_file
@@ -38,17 +37,11 @@ class _AllowedMentions(AllowedMentions):
         raise ValueError(f"Invalid allowed mentions {value}")
 
 
-async def resolve_prefix(bot: Bot, msg: Message):
-    if msg.guild is None:
-        return ""
-    return bot.user.mention
-
-
 class BotOptions(BaseModel):
     intents: _Intents = DEFAULT_INTENTS
     allowed_mentions: _AllowedMentions = DEFAULT_MENTIONS
 
-    command_prefix: list[str] | Callable = resolve_prefix
+    command_prefix: list[str] | Callable = "\x00"
     case_insensitive: bool = True
     strip_after_prefix: bool = True
     help_command: str = None

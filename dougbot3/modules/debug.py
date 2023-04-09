@@ -51,7 +51,7 @@ class DebugCommands(Cog):
             Choice(name="SIGTERM", value=15),
         ]
     )
-    async def kill(self, interaction: Interaction, *, signal: int = 2):
+    async def kill(self, interaction: Interaction, *, signal: int = 15):
         if not await self.bot.is_owner(interaction.user):
             return await interaction.response.send_message("Nuh uh.")
         await interaction.response.send_message("Sending signal ...")

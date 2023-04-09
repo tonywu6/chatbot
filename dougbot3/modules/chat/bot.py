@@ -23,7 +23,14 @@ from more_itertools import first
 
 from dougbot3.modules.chat.controller import ChatController
 from dougbot3.modules.chat.helpers import is_system_message, system_message
-from dougbot3.modules.chat.models import ChatCompletionRequest, ChatMessage, ChatModel
+from dougbot3.modules.chat.models import (
+    DEFAULT_REQUEST_TIMING,
+    REQUEST_TIMINGS,
+    ChatCompletionRequest,
+    ChatFeatures,
+    ChatMessage,
+    ChatModel,
+)
 from dougbot3.modules.chat.session import ChatSession
 from dougbot3.modules.chat.settings import ChatOptions
 from dougbot3.utils.config import load_settings
@@ -145,7 +152,7 @@ class ChatCommands(Cog):
         model="The GPT model to use.",
         system_message="Provide a custom system message.",
     )
-    @choices()
+    @choices(timing=REQUEST_TIMINGS)
     @guild_only()
     @bot_has_permissions(
         view_channel=True,
@@ -158,6 +165,7 @@ class ChatCommands(Cog):
         interaction: Interaction,
         preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),
         system_message: Optional[str] = None,
+        timing: int = DEFAULT_REQUEST_TIMING,
         model: ChatModel = "gpt-3.5-turbo-0301",
         temperature: float = 0.7,
         max_tokens: int = 2000,
@@ -217,7 +225,12 @@ class ChatCommands(Cog):
             max_tokens=max_tokens,
             messages=preset_dialog,
         )
-        session = ChatSession(request=request, assistant=self.bot.user.mention)
+        features = ChatFeatures(timing=timing)
+        session = ChatSession(
+            assistant=self.bot.user.mention,
+            request=request,
+            features=features,
+        )
 
         await thread.send(
             embed=session.to_atom(),
