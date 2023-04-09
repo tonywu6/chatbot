@@ -1,7 +1,7 @@
-from typing import get_args
-
-from discord.app_commands.models import Choice
+from typing import Literal
 
 
-def literal_choices(choices: list[str]) -> list[Choice]:
-    return [Choice(name=choice, value=choice) for choice in get_args(choices)]
+class KeyOf(str):
+    @classmethod
+    def __class_getitem__(cls, collection: dict):
+        return Literal[tuple(collection.keys())]  # type: ignore

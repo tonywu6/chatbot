@@ -10,6 +10,8 @@ from dougbot3.settings import AppSecrets
 from dougbot3.utils.config import load_settings
 from dougbot3.utils.logging import configure_logging
 
+SECRETS = load_settings(AppSecrets)
+
 
 @click.group()
 @click.option("--debug", is_flag=True, default=False)
@@ -41,9 +43,8 @@ def run(autoreload: bool = False):
 
     async def main():
         bot = await create_bot()
-        secrets = load_settings(AppSecrets)
         async with bot:
-            await bot.start(secrets.get_bot_token())
+            await bot.start(SECRETS.get_bot_token())
 
     with suppress(KeyboardInterrupt):
         asyncio.run(main())
@@ -53,9 +54,8 @@ def run(autoreload: bool = False):
 def sync_commands():
     async def main():
         bot = await create_bot()
-        secrets = load_settings(AppSecrets)
         async with bot:
-            await bot.login(secrets.get_bot_token())
+            await bot.login(SECRETS.get_bot_token())
             await bot.tree.sync()
 
     asyncio.run(main())

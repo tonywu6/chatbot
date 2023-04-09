@@ -1,11 +1,11 @@
 import asyncio
 
+import yaml
 from discord import Attachment, Embed, Message, Thread
 from loguru import logger
 from markdown_it import MarkdownIt
 from markdown_it.tree import SyntaxTreeNode
 from more_itertools import constrained_batches, split_at
-from ruamel import yaml
 
 from dougbot3.modules.chat.helpers import is_system_message, system_message
 from dougbot3.modules.chat.models import (
@@ -275,15 +275,15 @@ class ChatSession:
         return request
 
     def to_atom(self) -> Embed2:
-        params = yaml.safe_dump(self.atom.dict(), default_flow_style=False)
+        params = yaml.safe_dump(
+            self.atom.dict(),
+            default_flow_style=False,
+            sort_keys=False,
+        )
         report = (
             Embed2()
             .set_title("Chat session")
             .add_field("Parameters", pre(params, "yaml"))
             .add_field("Token usage", self.usage)
         )
-        if self.atom.messages:
-            system_message = self.atom.messages[0]
-            if system_message.role == "system":
-                report = report.add_field("System message", system_message.content)
         return report

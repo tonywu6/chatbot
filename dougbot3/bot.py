@@ -16,6 +16,8 @@ from dougbot3.errors import ErrorView, report_error
 from dougbot3.settings import BotSettings
 from dougbot3.utils.config import load_settings
 
+BOT_SETTINGS = load_settings(BotSettings)
+
 
 def find_extensions(entry: ModuleType) -> frozenset[str]:
     def ignore_module(module: pkgutil.ModuleInfo) -> bool:
@@ -50,8 +52,7 @@ async def load_all_extensions(bot: Bot, extensions: Iterable[str]) -> None:
 
 
 async def create_bot():
-    settings = load_settings(BotSettings)
-    options = settings.bot_options.dict()
+    options = BOT_SETTINGS.bot_options.dict()
 
     bot = Bot(**options)
 

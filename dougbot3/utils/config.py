@@ -29,7 +29,7 @@ def toml_config_loader(path: Path) -> Callable[[BaseSettings], dict]:
 def yaml_config_loader(path: Path) -> Callable[[BaseSettings], dict]:
     @cache
     def cached_read(path: Path):
-        return yaml.safe_load(path.read_text())
+        return yaml.safe_load(path.read_text()) or {}
 
     def loader(settings: BaseSettings) -> dict:
         if not path.exists():

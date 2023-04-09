@@ -5,9 +5,9 @@ from typing import Any, Protocol, TypeVar
 
 import attr
 import toml
+import yaml
 from discord import Colour, Embed, Guild, Member, User
 from discord.types.embed import EmbedType
-from ruamel import yaml
 
 from dougbot3.utils.discord.markdown import unwrap_codeblock
 
@@ -566,7 +566,11 @@ class Embed2:
         front_matters = {k: v for k, v in front_matters.items() if v}
 
         if front_matters:
-            serialized = yaml.safe_dump(front_matters, default_flow_style=False)
+            serialized = yaml.safe_dump(
+                front_matters,
+                default_flow_style=False,
+                sort_keys=False,
+            )
             lines.append("---")
             lines.append(str(serialized).strip())
             lines.append("---")

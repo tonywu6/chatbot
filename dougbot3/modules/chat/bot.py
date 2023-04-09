@@ -1,3 +1,5 @@
+from typing import Optional
+
 import openai
 import orjson
 from discord import (
@@ -24,7 +26,7 @@ from dougbot3.modules.chat.helpers import (
     system_message,
     token_limit_warning,
 )
-from dougbot3.modules.chat.models import ChatCompletionRequest, ChatModel
+from dougbot3.modules.chat.models import ChatCompletionRequest, ChatMessage, ChatModel
 from dougbot3.modules.chat.session import ChatSession
 from dougbot3.modules.chat.settings import ChatOptions
 from dougbot3.settings import AppSecrets
@@ -32,7 +34,21 @@ from dougbot3.utils.config import load_settings
 from dougbot3.utils.discord import Embed2
 from dougbot3.utils.discord.color import Color2
 from dougbot3.utils.discord.file import discord_open
-from dougbot3.utils.discord.transform import literal_choices
+from dougbot3.utils.discord.transform import KeyOf
+
+SECRETS = load_settings(AppSecrets)
+CHAT_OPTIONS = load_settings(ChatOptions)
+
+CHAT_PRESETS: dict[str, list[ChatMessage]] = {
+    "Helpful assistant": [
+        ChatMessage(
+            role="system",
+            content="%(environment)s. You are an helpful assistant.",
+        )
+    ],
+    "Empty": [],
+    **CHAT_OPTIONS.presets,
+}
 
 
 class ManageChatView(View):
@@ -42,11 +58,11 @@ class ManageChatView(View):
         self.controller = controller or ChatController()
 
     @button(
-        label="Export request",
+        label="Export session",
         style=ButtonStyle.blurple,
-        custom_id="manage_chat:export_request",
+        custom_id="manage_chat:export_session",
     )
-    async def export_request(self, interaction: Interaction, button: Button = None):
+    async def export_session(self, interaction: Interaction, button: Button = None):
         channel = interaction.channel
         if not isinstance(channel, Thread):
             return
@@ -93,18 +109,18 @@ class ManageChatView(View):
 
 class ChatCommands(Cog):
     def __init__(self, bot: Bot) -> None:
-        self.options = ChatOptions()
-
         self.controller = ChatController()
         self.bot = bot
         self.bot.add_view(ManageChatView(self.bot, self.controller))
 
         self._fake = Faker("en-US")
-        self._api_key = load_settings(AppSecrets).OPENAI_TOKEN
 
     @command(name="chat", description="Start a chat thread with the bot.")
-    @describe(model="The GPT model to use.")
-    @choices(model=literal_choices(ChatModel))
+    @describe(
+        preset="Include predefined initial messages.",
+        model="The GPT model to use.",
+    )
+    @choices()
     @guild_only()
     @bot_has_permissions(
         view_channel=True,
@@ -115,6 +131,8 @@ class ChatCommands(Cog):
     async def chat(
         self,
         interaction: Interaction,
+        preset: KeyOf[CHAT_PRESETS] = "Helpful assistant",
+        system_message: Optional[str] = None,
         model: ChatModel = "gpt-3.5-turbo-0301",
         temperature: float = 0.7,
         max_tokens: int = 2000,
@@ -141,11 +159,30 @@ class ChatCommands(Cog):
         if max_tokens <= 0:
             max_tokens = None
 
+        environment_info = (
+            f"You are {self.bot.user.mention}"
+            f" talking to {interaction.user.mention} over Discord."
+            f" Server name: {interaction.guild.name}."
+            f" Channel name: {thread_name}"
+        )
+        substitutions = {"environment": environment_info}
+        preset_dialog = []
+        if system_message:
+            preset_dialog = [
+                ChatMessage(role="system", content=system_message % substitutions)
+            ]
+        else:
+            preset_dialog = [
+                message.copy(update={"content": message.content % substitutions})
+                for message in CHAT_PRESETS.get(preset, [])
+            ]
+
         request = ChatCompletionRequest(
             model=model,
             user=interaction.user.mention,
             temperature=temperature,
             max_tokens=max_tokens,
+            messages=preset_dialog,
         )
         session = ChatSession(request=request, assistant=self.bot.user.mention)
 
@@ -224,7 +261,7 @@ class ChatCommands(Cog):
             try:
                 response = await openai.ChatCompletion.acreate(
                     **session.to_request().dict(),
-                    api_key=self._api_key.get_secret_value(),
+                    api_key=SECRETS.OPENAI_TOKEN.get_secret_value(),
                 )
             except Exception as e:
                 await report_error(e, bot=self.bot, messageable=thread)

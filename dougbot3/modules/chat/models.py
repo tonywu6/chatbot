@@ -56,12 +56,12 @@ class ChatMessage(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
+    user: str = "user"
     model: ChatModel = "gpt-3.5-turbo-0301"
-    messages: list[ChatMessage] = []
+    max_tokens: Optional[int] = 2000
     temperature: float = 0.7
     top_p: float = 1
-    max_tokens: Optional[int] = 2000
-    user: str = "user"
+    messages: list[ChatMessage] = []
 
 
 class DiscordMessage(TypedDict):
