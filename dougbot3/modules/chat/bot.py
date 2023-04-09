@@ -10,6 +10,7 @@ from discord import (
     Message,
     RawBulkMessageDeleteEvent,
     RawMessageDeleteEvent,
+    RawMessageUpdateEvent,
     TextChannel,
     Thread,
 )
@@ -22,7 +23,7 @@ from loguru import logger
 from more_itertools import first
 
 from dougbot3.modules.chat.controller import ChatController
-from dougbot3.modules.chat.helpers import is_system_message, system_message
+from dougbot3.modules.chat.helpers import system_message
 from dougbot3.modules.chat.models import (
     DEFAULT_REQUEST_TIMING,
     REQUEST_TIMINGS,
@@ -271,30 +272,36 @@ class ChatCommands(Cog):
     async def on_raw_bulk_message_delete(self, payload: RawBulkMessageDeleteEvent):
         await self._delete_messages(payload.channel_id, *payload.message_ids)
 
-    @Cog.listener("on_message_edit")
-    async def on_message_edit(self, before: Message, after: Message):
-        thread = after.channel
-        session = self.controller.get_session(thread)
-        if not session:
-            return
-        await session.splice_messages(before.id, after)
-
     @Cog.listener("on_message")
     async def on_message(self, message: Message):
-        if is_system_message(message):
-            return
-
         thread = message.channel
         if not isinstance(thread, Thread):
             return
 
-        try:
-            send_notice = not message.author.bot
-            session = await self.controller.ensure_session(thread, verbose=send_notice)
-        except UserInputError:
-            return
+        send_notice = not message.author.bot
+        session = await self.controller.ensure_session(thread, verbose=send_notice)
 
         await session.answer(message)
+
+    @Cog.listener("on_raw_message_edit")
+    async def on_raw_message_edit(self, payload: RawMessageUpdateEvent):
+        channel = self.bot.get_channel(payload.channel_id)
+        if not isinstance(channel, Thread):
+            return
+
+        session = self.controller.get_session(channel)
+        if not session:
+            return
+
+        before = payload.cached_message
+        after = await channel.fetch_message(payload.message_id)
+
+        if before and before.flags.loading:
+            # respond to edits due to command deferral
+            await session.answer(after)
+        else:
+            # don't respond to regular message edits
+            await session.process_request(after)
 
 
 async def setup(bot: Bot) -> None:

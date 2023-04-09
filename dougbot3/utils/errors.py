@@ -54,6 +54,9 @@ async def report_error(
             title = "HTTP 500 Internal Server Error"
             logger.exception(error)
 
+    if not (interaction or messageable):
+        return
+
     def get_traceback() -> File:
         if not isinstance(error, BaseException):
             return

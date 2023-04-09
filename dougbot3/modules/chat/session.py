@@ -218,18 +218,24 @@ class ChatSession:
 
         return messages
 
-    async def splice_messages(self, delete: int, insert: Message | None = None) -> None:
-        index = [i for i, m in enumerate(self.messages) if m.message_id == delete]
-        if insert:
-            updated = await self.parse_message(self.atom.user, self.assistant, insert)
-        else:
-            updated = []
-        if not index:
-            self.messages.extend(updated)
-        else:
-            self.messages[min(index) : max(index) + 1] = updated
+    async def splice_messages(self, delete: int, insert: Message | None = None) -> bool:
+        async with self._processing:
+            index = [i for i, m in enumerate(self.messages) if m.message_id == delete]
+            if insert and not insert.flags.loading and not is_system_message(insert):
+                updated = await self.parse_message(
+                    self.atom.user,
+                    self.assistant,
+                    insert,
+                )
+            else:
+                updated = []
+            if not index:
+                self.messages.extend(updated)
+            else:
+                self.messages[min(index) : max(index) + 1] = updated
+            return bool(updated)
 
-    async def process_request(self, message: Message) -> None:
+    async def process_request(self, message: Message) -> bool:
         """Parse a Discord message and add it to the chain.
 
         Text messages from the user or the assistant will be saved as they are.
@@ -240,8 +246,7 @@ class ChatSession:
         :param message: a Discord Message object
         :type message: Message
         """
-        async with self._processing:
-            await self.splice_messages(message.id, message)
+        return await self.splice_messages(message.id, message)
 
     def prepare_replies(self, response: ChatCompletionResponse) -> list[DiscordMessage]:
         """Parse an API response into a list of Discord messages.
@@ -351,16 +356,6 @@ class ChatSession:
             return answer.get("content") or None
         return None
 
-    def should_answer(self, message: Message):
-        result = not message.author.mention == self.assistant
-        if self.features.timing & TriggerTiming.ON_MENTION.value:
-            result = result and self.assistant in [m.mention for m in message.mentions]
-        if self.features.timing & TriggerMessage.FROM_INITIATOR.value:
-            result = result and message.author.mention == self.atom.user
-        elif self.features.timing & TriggerMessage.FROM_HUMAN.value:
-            result = result and not message.author.bot
-        return result
-
     @asynccontextmanager
     async def maybe_update_title(self, channel: Thread):
         def response_count():
@@ -384,10 +379,20 @@ class ChatSession:
             if title:
                 await channel.edit(name=title)
 
-    async def answer(self, message: Message | None = None):
-        await self.process_request(message)
+    def should_answer(self, message: Message):
+        result = not message.author.mention == self.assistant
+        if self.features.timing & TriggerTiming.ON_MENTION.value:
+            result = result and self.assistant in [m.mention for m in message.mentions]
+        if self.features.timing & TriggerMessage.FROM_INITIATOR.value:
+            result = result and message.author.mention == self.atom.user
+        elif self.features.timing & TriggerMessage.FROM_HUMAN.value:
+            result = result and not message.author.bot
+        return result
 
-        if not self.should_answer(message):
+    async def answer(self, message: Message | None = None):
+        new_message = await self.process_request(message)
+
+        if not new_message or not self.should_answer(message):
             return
 
         thread = message.channel
