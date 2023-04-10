@@ -29,7 +29,7 @@ class DebugCommands(Cog):
     )
     async def ping(self, interaction: Interaction):
         gateway_latency = self.bot.latency * 1000
-        await interaction.response.send_message("Pong!")
+        await interaction.response.send_message("Pong!", ephemeral=True)
 
         edit_timestamp = utcnow()
         await interaction.edit_original_response(
@@ -53,8 +53,8 @@ class DebugCommands(Cog):
     )
     async def kill(self, interaction: Interaction, *, signal: int = 15):
         if not await self.bot.is_owner(interaction.user):
-            return await interaction.response.send_message("Nuh uh.")
-        await interaction.response.send_message("Sending signal ...")
+            return await interaction.response.send_message("Nuh uh.", ephemeral=True)
+        await interaction.response.send_message("Sending signal ...", ephemeral=True)
         async with interaction.channel.typing():
             return psutil.Process(os.getpid()).send_signal(signal)
 

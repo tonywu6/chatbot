@@ -52,6 +52,8 @@ class BotSettings(BaseSettings):
 
     bot_options: BotOptions = BotOptions()
 
+    error_report_channel: int | None = None
+
 
 class AppSecrets(BaseSettings):
     Config = use_settings_file("instance/secrets.toml")

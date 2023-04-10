@@ -58,16 +58,30 @@ class ChatMessage(BaseModel):
 class ChatCompletionRequest(BaseModel):
     user: str = "user"
     model: ChatModel = "gpt-3.5-turbo-0301"
-    max_tokens: Optional[int] = 2000
+    max_tokens: Optional[int] = None
     temperature: float = 0.7
     top_p: float = 1
     messages: list[ChatMessage] = []
 
+    def limit_max_tokens(self, usage: int) -> bool:
+        """Adjust max_tokens to fit within the token limit for the model.
 
-class DiscordMessage(TypedDict):
-    content: Optional[str]
-    embeds: Optional[list[Embed]]
-    files: Optional[list[File]]
+        :param usage: the number of tokens in the prompt
+        :type usage: int
+        :return: whether max_tokens was adjusted
+        :rtype: bool
+        :raises ValueError: if usage exceeds the token limit
+        """
+        if self.max_tokens is None:
+            return
+        quota = CHAT_MODEL_TOKEN_LIMITS[self.model] - usage
+        if quota <= 0:
+            raise ValueError("usage exceeds token limit")
+        if self.max_tokens > quota:
+            # round down to nearest 10 to compensate for inconsistency in tokenization
+            self.max_tokens = quota // 10 * 10
+            return True
+        return False
 
 
 Timing = Literal["immediately", "only when mentioned"]
@@ -77,3 +91,14 @@ ReplyTo = Literal["everyone", "every human", "you"]
 class ChatFeatures(BaseModel):
     timing: Timing = "immediately"
     reply_to: ReplyTo = "you"
+
+
+class ChatSessionOptions(BaseModel):
+    request: ChatCompletionRequest
+    features: ChatFeatures = Field(default_factory=ChatFeatures)
+
+
+class DiscordMessage(TypedDict):
+    content: Optional[str]
+    embeds: Optional[list[Embed]]
+    files: Optional[list[File]]

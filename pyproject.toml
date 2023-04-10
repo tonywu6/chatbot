@@ -23,6 +23,7 @@ markdown-it-py = "^2.2.0"
 more-itertools = "^9.1.0"
 python-slugify = "^8.0.1"
 arrow = "^1.2.3"
+tiktoken = "^0.3.3"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"

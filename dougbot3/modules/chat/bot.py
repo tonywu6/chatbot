@@ -23,12 +23,12 @@ from loguru import logger
 from more_itertools import first
 
 from dougbot3.modules.chat.controller import ChatController
-from dougbot3.modules.chat.helpers import system_message
 from dougbot3.modules.chat.models import (
     ChatCompletionRequest,
     ChatFeatures,
     ChatMessage,
     ChatModel,
+    ChatSessionOptions,
     ReplyTo,
     Timing,
 )
@@ -40,6 +40,7 @@ from dougbot3.utils.discord.color import Color2
 from dougbot3.utils.discord.file import discord_open
 from dougbot3.utils.discord.transform import KeyOf
 from dougbot3.utils.discord.ui import DefaultView
+from dougbot3.utils.errors import system_message
 
 CHAT_OPTIONS = load_settings(ChatOptions)
 
@@ -171,7 +172,7 @@ class ChatCommands(Cog):
         reply_to: ReplyTo = "you",
         model: ChatModel = "gpt-3.5-turbo-0301",
         temperature: float = 0.7,
-        max_tokens: int = 2000,
+        max_tokens: int | None = None,
     ):
         if not isinstance(interaction.channel, TextChannel):
             raise UserInputError("This command can only be used in a text channel.")
@@ -192,15 +193,12 @@ class ChatCommands(Cog):
         )
         await interaction.response.send_message(embed=response, ephemeral=True)
 
-        if max_tokens <= 0:
-            max_tokens = None
-
         env = {
             "assistant": self.bot.user.mention,
             "user": interaction.user.mention,
             "server": interaction.guild.name,
             "channel": thread.mention,
-            "current_date": arrow.now().isoformat(),
+            "current_date": arrow.now().format("YYYY-MM-DD HH:mm:ss ZZ"),
         }
         env["discord"] = (
             "You are talking to {user} over Discord."
@@ -221,22 +219,20 @@ class ChatCommands(Cog):
                 for m in CHAT_PRESETS.get(preset, [])
             ]
 
-        request = ChatCompletionRequest(
-            model=model,
-            user=interaction.user.mention,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            messages=preset_dialog,
+        atom = ChatSessionOptions(
+            request=ChatCompletionRequest(
+                model=model,
+                user=interaction.user.mention,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                messages=preset_dialog,
+            ),
+            features=ChatFeatures(timing=timing, reply_to=reply_to),
         )
-        features = ChatFeatures(timing=timing, reply_to=reply_to)
-        session = ChatSession(
-            assistant=self.bot.user.mention,
-            request=request,
-            features=features,
-        )
+        session = ChatSession(assistant=self.bot.user.mention, options=atom)
 
         await thread.send(
-            embed=session.to_atom(),
+            **session.to_atom(),
             view=ManageChatView(self.bot, self.controller),
         )
         await thread.add_user(interaction.user)
@@ -250,10 +246,9 @@ class ChatCommands(Cog):
         session = await self.controller.ensure_session(interaction.channel)
 
         helper = ManageChatView(self.bot, self.controller)
-        report = session.to_atom().set_timestamp()
 
         await interaction.response.send_message(
-            embed=report,
+            **session.to_atom(),
             view=helper,
             ephemeral=True,
         )

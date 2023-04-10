@@ -2,6 +2,7 @@ import asyncio
 import importlib
 import inspect
 import pkgutil
+import sys
 from types import ModuleType
 from typing import Iterable, NoReturn
 
@@ -71,11 +72,17 @@ async def create_bot():
 
     @bot.tree.error
     async def on_app_command_error(interaction: Interaction, error: AppCommandError):
-        await report_error(error, bot=bot, interaction=interaction)
+        await report_error(error, interaction=interaction)
 
     @bot.event
     async def on_command_error(ctx: Context, error: CommandError):
-        await report_error(error, bot=bot, messageable=ctx)
+        await report_error(error, messageable=ctx)
+
+    @bot.event
+    async def on_error(event: str, *args, **kwargs):
+        exc_t, exc, tb = sys.exc_info()
+        channel = bot.get_channel(BOT_SETTINGS.error_report_channel)
+        await report_error(exc, messageable=channel)
 
     bot.add_view(ErrorReportView())
 

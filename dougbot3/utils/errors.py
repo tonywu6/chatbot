@@ -1,11 +1,13 @@
 import sys
 import traceback
+import warnings
+from contextlib import asynccontextmanager
 
 import openai
-from discord import File, Interaction, errors as discord_errors
+from discord import File, Interaction, Message, errors as discord_errors
 from discord.abc import Messageable
 from discord.app_commands import errors as app_cmd_errors
-from discord.ext.commands import Bot, errors as ext_cmd_errors
+from discord.ext.commands import errors as ext_cmd_errors
 from loguru import logger
 
 from dougbot3.utils.datetime import utcnow
@@ -13,16 +15,59 @@ from dougbot3.utils.discord import Color2, Embed2
 from dougbot3.utils.discord.file import discord_open
 
 
+def system_message():
+    return Embed2().set_footer("System message")
+
+
+def is_system_message(message: Message):
+    return any(
+        embed.footer and embed.footer.text == "System message"
+        for embed in message.embeds
+    )
+
+
+@asynccontextmanager
+async def report_warnings(messageable: Messageable):
+    from dougbot3.utils.discord.ui import ErrorReportView
+
+    with warnings.catch_warnings(record=True) as messages:
+        try:
+            yield
+        finally:
+            if messages:
+                report = (
+                    system_message()
+                    .set_color(Color2.orange())
+                    .set_title("Warnings")
+                    .set_description("\n".join([str(m.message) for m in messages]))
+                )
+                with logger.catch(Exception):
+                    await messageable.send(embed=report, view=ErrorReportView())
+
+
 async def report_error(
     error: Exception,
     *,
-    bot: Bot | None = None,
     interaction: Interaction | None = None,
     messageable: Messageable | None = None,
 ):
     from dougbot3.utils.discord.ui import ErrorReportView
 
     error = getattr(error, "original", None) or error.__cause__ or error
+
+    def get_traceback() -> File:
+        if not isinstance(error, BaseException):
+            return
+        tb = traceback.format_exception(error)
+        tb_body = "".join(tb)
+        for path in sys.path:
+            tb_body = tb_body.replace(path, "")
+        filename = f'stacktrace.{utcnow().isoformat().replace(":", ".")}.py'
+        with discord_open(filename) as (stream, file):
+            stream.write(tb_body.encode())
+        return file
+
+    tb = None
 
     match error:
         case (
@@ -53,40 +98,19 @@ async def report_error(
             color = Color2.red()
             title = "HTTP 500 Internal Server Error"
             logger.exception(error)
+            tb = get_traceback()
 
     if not (interaction or messageable):
         return
 
-    def get_traceback() -> File:
-        if not isinstance(error, BaseException):
-            return
-        tb = traceback.format_exception(
-            type(error),
-            error,
-            error.__traceback__,
-        )
-        tb_body = "".join(tb)
-        for path in sys.path:
-            tb_body = tb_body.replace(path, "")
-        filename = f'stacktrace.{utcnow().isoformat().replace(":", ".")}.py'
-        with discord_open(filename) as (stream, file):
-            stream.write(tb_body.encode())
-        return file
-
     report = (
-        Embed2()
-        .set_timestamp()
-        .set_color(color)
-        .set_title(title)
-        .set_description(str(error))
+        system_message().set_color(color).set_title(title).set_description(str(error))
     )
 
     with logger.catch(Exception):
-        response = {"embed": report, "view": ErrorReportView()}
+        response = {"embed": report, "file": tb, "view": ErrorReportView()}
         if interaction:
             response["ephemeral"] = True
-            if bot and await bot.is_owner(interaction.user):
-                response["file"] = get_traceback()
             if interaction.response.is_done():
                 await interaction.followup.send(**response)
             else:

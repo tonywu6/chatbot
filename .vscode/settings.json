@@ -1,3 +1,10 @@
 {
-  "cSpell.words": ["blurple", "emojize", "gifv", "mdformat", "psutil"]
+  "cSpell.words": [
+    "blurple",
+    "emojize",
+    "gifv",
+    "mdformat",
+    "psutil",
+    "tiktoken"
+  ]
 }

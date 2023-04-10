@@ -253,7 +253,7 @@ def divide_text(
             yield text[begin:]
             return
         if text[end] in delimiter:
-            sep = end
+            sep = end + 1
         end += 1
         if end > begin + maxlen:
             if sep > begin:

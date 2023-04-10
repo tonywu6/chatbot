@@ -1,8 +1,9 @@
 from discord import Thread
 from discord.ext.commands import UserInputError
 
-from dougbot3.modules.chat.helpers import IdempotentTasks, system_message
+from dougbot3.modules.chat.helpers import IdempotentTasks
 from dougbot3.modules.chat.session import ChatSession
+from dougbot3.utils.errors import system_message
 
 
 class ChatController:
@@ -35,7 +36,7 @@ class ChatController:
 
         if verbose:
             notice = system_message().set_description("Rebuilding chat history ...")
-            await thread.send(embed=notice)
+            await thread.send(embed=notice, delete_after=10)
 
         task = ChatSession.from_thread(thread)
         session = await self._pending_threads.run(thread, task)

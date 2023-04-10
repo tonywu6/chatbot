@@ -1,5 +1,7 @@
 import asyncio
+import warnings
 from contextlib import asynccontextmanager
+from textwrap import shorten
 
 import openai
 import yaml
@@ -7,28 +9,30 @@ from discord import Attachment, Embed, Message, Thread
 from loguru import logger
 from markdown_it import MarkdownIt
 from markdown_it.tree import SyntaxTreeNode
-from more_itertools import constrained_batches, first, split_at
+from more_itertools import constrained_batches, first, locate, split_at
 
-from dougbot3.modules.chat.helpers import (
-    is_system_message,
-    system_message,
-    token_limit_warning,
-)
+from dougbot3.modules.chat.helpers import num_tokens_from_messages
 from dougbot3.modules.chat.models import (
+    CHAT_MODEL_TOKEN_LIMITS,
     ChatCompletionRequest,
     ChatCompletionResponse,
-    ChatFeatures,
     ChatMessage,
     ChatMessageType,
+    ChatSessionOptions,
     DiscordMessage,
 )
 from dougbot3.settings import AppSecrets
 from dougbot3.utils.config import load_settings
 from dougbot3.utils.discord.color import Color2
-from dougbot3.utils.discord.embed import Embed2, EmbedReader
+from dougbot3.utils.discord.embed import Embed2
 from dougbot3.utils.discord.file import discord_open
-from dougbot3.utils.discord.markdown import divide_text, pre
-from dougbot3.utils.errors import report_error
+from dougbot3.utils.discord.markdown import divide_text
+from dougbot3.utils.errors import (
+    is_system_message,
+    report_error,
+    report_warnings,
+    system_message,
+)
 
 SECRETS = load_settings(AppSecrets)
 
@@ -39,65 +43,108 @@ class ChatSession:
     def __init__(
         self,
         assistant: str,
-        request: ChatCompletionRequest,
-        features: ChatFeatures | None = None,
+        options: ChatSessionOptions,
     ):
-        self.atom = request
         self.assistant = assistant
-        self.features = features or ChatFeatures()
 
+        self.options = options
         self.messages: list[ChatMessage] = []
-        self.usage: int = -1
 
         self._processing = asyncio.Lock()
 
+        self.token_usage: int = 0
+        self.token_estimate: int = 0
+        self.estimate_token_usage(removed=[], added=self.options.request.messages)
+
+    @property
+    def all_messages(self) -> list[ChatMessage]:
+        """Create a list of all messages including messages from the preset."""
+        return [
+            *self.options.request.messages,
+            *self.messages,
+        ]
+
+    @property
+    def usage_description(self) -> str:
+        if self.token_usage != self.token_estimate:
+            return f"{self.token_count_upper_bound} (estimated)"
+        return f"{self.token_usage}"
+
+    @property
+    def token_count_upper_bound(self) -> int:
+        return max(self.token_estimate, self.token_usage)
+
+    @property
+    def system_message(self) -> str | None:
+        if not self.options.request.messages:
+            return None
+        message = self.options.request.messages[0]
+        if message.role != "system":
+            return
+        return message.content
+
+    def estimate_token_usage(
+        self,
+        *,
+        removed: list[ChatMessage],
+        added: list[ChatMessage],
+    ) -> None:
+        removed_tokens = num_tokens_from_messages(removed)
+        added_tokens = num_tokens_from_messages(added)
+        self.token_estimate = self.token_estimate - removed_tokens + added_tokens
+
     def to_request(self) -> ChatCompletionRequest:
-        request = self.atom.copy()
-        request.messages = [*request.messages, *self.messages]
+        """Return the API payload."""
+        request = self.options.request.copy()
+        request.messages = self.all_messages
         return request
 
-    def to_atom(self) -> Embed2:
-        params = yaml.safe_dump(
-            self.atom.dict(),
-            default_flow_style=False,
-            sort_keys=False,
-        )
-        features = yaml.safe_dump(
-            self.features.dict(),
-            default_flow_style=False,
-            sort_keys=False,
-        )
+    def to_atom(self) -> DiscordMessage:
+        """Create a Discord message containing the session's config."""
+        with discord_open("atom.yaml") as (stream, file):
+            content = yaml.safe_dump(
+                self.options.dict(),
+                sort_keys=False,
+                default_flow_style=False,
+            )
+            stream.write(content.encode())
         report = (
             system_message()
+            .set_color(Color2.green())
             .set_title("Chat session")
-            .add_field("Parameters", pre(params, "yaml"))
-            .add_field("Features", pre(features, "yaml"))
-            .add_field("Token usage", self.usage)
+            .set_description(
+                shorten(self.system_message, 4000, replace_whitespace=False)
+                or "(none)",
+            )
+            .add_field("Token usage", self.usage_description)
         )
-        return report
+        return {"embeds": [report], "files": [file]}
 
     async def fetch(self):
+        request = self.to_request()
+        if request.limit_max_tokens(self.token_count_upper_bound):
+            warnings.warn(
+                f"max_tokens was reduced to {request.max_tokens}"
+                " to avoid exceeding the token limit",
+                stacklevel=2,
+            )
         return await openai.ChatCompletion.acreate(
-            **self.to_request().dict(), api_key=SECRETS.OPENAI_TOKEN.get_secret_value()
+            **request.dict(),
+            api_key=SECRETS.OPENAI_TOKEN.get_secret_value(),
         )
 
     @classmethod
     async def from_thread(cls, thread: Thread):
         logger.info("Chat {0}: rebuilding history", thread.mention)
 
-        def get_parameters(message: Message):
-            try:
-                embed = message.embeds[0]
-                reader = EmbedReader(embed)
-                params = reader["Parameters"]
-                atom = ChatCompletionRequest(**params)
-                features = ChatFeatures(**reader.get("Features", {}))
-            except (LookupError, ValueError):
-                logger.info("Chat {0}: not a valid thread", thread.mention)
+        async def get_options(message: Message):
+            if not message.attachments:
                 raise ValueError
-            else:
-                logger.info("Found atom: {0}", atom)
-                return atom, features
+            content = await message.attachments[0].read()
+            try:
+                return ChatSessionOptions(**yaml.safe_load(content))
+            except (TypeError, ValueError, yaml.YAMLError):
+                raise ValueError
 
         session: cls | None = None
 
@@ -107,9 +154,10 @@ class ChatSession:
                 continue
 
             try:
-                atom, features = get_parameters(message)
+                options = await get_options(message)
+                logger.info("Chat {0}: found options", options)
                 assistant = message.author.mention
-                session = cls(assistant=assistant, request=atom, features=features)
+                session = cls(assistant=assistant, options=options)
             except ValueError:
                 return None
 
@@ -216,21 +264,33 @@ class ChatSession:
 
         return messages
 
-    async def splice_messages(self, delete: int, insert: Message | None = None) -> bool:
+    async def splice_messages(
+        self,
+        to_delete: int,
+        to_insert: Message | None = None,
+    ) -> bool:
         async with self._processing:
-            index = [i for i, m in enumerate(self.messages) if m.message_id == delete]
-            if insert and not insert.flags.loading and not is_system_message(insert):
+            index = [*locate(self.messages, lambda m: m.message_id == to_delete)]
+            if (
+                to_insert
+                and not to_insert.flags.loading
+                and not is_system_message(to_insert)
+            ):
                 updated = await self.parse_message(
-                    self.atom.user,
+                    self.options.request.user,
                     self.assistant,
-                    insert,
+                    to_insert,
                 )
             else:
                 updated = []
             if not index:
+                removed = []
                 self.messages.extend(updated)
             else:
-                self.messages[min(index) : max(index) + 1] = updated
+                removed_slice = slice(min(index), max(index) + 1)
+                removed = self.messages[removed_slice]
+                self.messages[removed_slice] = updated
+            self.estimate_token_usage(removed=removed, added=updated)
             return bool(updated)
 
     async def process_request(self, message: Message) -> bool:
@@ -258,7 +318,7 @@ class ChatSession:
         :return: a list of DiscordMessage typed dict
         :rtype: list[DiscordMessage]
         """
-        self.usage = response["usage"]["total_tokens"]
+        self.token_usage = response["usage"]["total_tokens"]
 
         if not response["choices"]:
             return []
@@ -316,19 +376,17 @@ class ChatSession:
         logger.info("Finish reason: {0}", finish_reason)
 
         if finish_reason != "stop":
-            warning = (
-                system_message()
-                .set_title("Finish reason")
-                .set_description(f"Finish reason was `{finish_reason}`")
-                .set_color(Color2.orange())
-            )
-            results.append({"embeds": [warning]})
+            warnings.warn(f'Finish reason was "{finish_reason}"', stacklevel=2)
 
         return results
 
     async def write_title(self):
-        request = ChatCompletionRequest(max_tokens=256, temperature=0.2)
-        session = ChatSession(request=request, assistant=request.model)
+        session = ChatSession(
+            assistant="assistant",
+            options=ChatSessionOptions(
+                request=ChatCompletionRequest(max_tokens=256, temperature=0),
+            ),
+        )
         messages: list[str] = [
             f"{m.role}: {m.content}" for m in self.messages if m.role != "system"
         ]
@@ -340,7 +398,7 @@ class ChatSession:
                 " as if you are writing an article title."
                 " Your slug should be in the conversation's original language."
                 " Respond with just the topic itself."
-                " Do not put quotes or periods in your response.",
+                " Do not put quotation marks or periods in your response.",
             ),
         )
         session.messages.append(
@@ -381,11 +439,11 @@ class ChatSession:
 
     def should_answer(self, message: Message):
         result = not message.author.mention == self.assistant
-        if self.features.timing == "only when mentioned":
+        if self.options.features.timing == "only when mentioned":
             result = result and self.assistant in [m.mention for m in message.mentions]
-        if self.features.reply_to == "you":
-            result = result and message.author.mention == self.atom.user
-        elif self.features.reply_to == "every human":
+        if self.options.features.reply_to == "you":
+            result = result and message.author.mention == self.options.request.user
+        elif self.options.features.reply_to == "every human":
             result = result and not message.author.bot
         return result
 
@@ -397,13 +455,17 @@ class ChatSession:
 
         thread = message.channel
 
-        async with thread.typing(), self.maybe_update_title(thread):
+        async with (
+            self.maybe_update_title(thread),
+            report_warnings(thread),
+            thread.typing(),
+        ):
             logger.info("Chat {0}: sending API request", thread.mention)
 
             try:
                 response = await self.fetch()
             except Exception as e:
-                await report_error(e, bot=self.bot, messageable=thread)
+                await report_error(e, messageable=thread)
                 return
 
             replies = self.prepare_replies(response)
@@ -412,5 +474,13 @@ class ChatSession:
             for reply in replies:
                 await thread.send(**reply)
 
-        if warning := token_limit_warning(self.usage, self.atom.model):
-            await thread.send(embed=warning)
+            self.warn_about_token_limit()
+
+    def warn_about_token_limit(self):
+        limit = CHAT_MODEL_TOKEN_LIMITS[self.options.request.model]
+        percentage = self.token_count_upper_bound / limit
+        if percentage > 0.75:
+            warnings.warn(
+                f"Token usage is at {percentage * 100:.0f}% of the model's limit.",
+                stacklevel=2,
+            )
