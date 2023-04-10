@@ -5,7 +5,7 @@ from textwrap import shorten
 
 import openai
 import yaml
-from discord import Attachment, Embed, Message, Thread
+from discord import Attachment, Embed, Message, MessageType, Thread
 from loguru import logger
 from markdown_it import MarkdownIt
 from markdown_it.tree import SyntaxTreeNode
@@ -243,6 +243,11 @@ class ChatSession:
 
         role = "assistant" if author.mention == assistant else "user"
 
+        if message.type == MessageType.chat_input_command and message.interaction:
+            invoker = message.interaction.user.mention
+            action = f"the /{message.interaction.name} command"
+            messages.append(ChatMessage(role=role, content=f"{invoker} used {action}"))
+
         if message.content:
             content = message.content
             if author.mention != user and author.mention != assistant:
@@ -439,11 +444,11 @@ class ChatSession:
 
     def should_answer(self, message: Message):
         result = not message.author.mention == self.assistant
-        if self.options.features.timing == "only when mentioned":
+        if self.options.features.timing == "when mentioned":
             result = result and self.assistant in [m.mention for m in message.mentions]
-        if self.options.features.reply_to == "you":
+        if self.options.features.reply_to == "initial user":
             result = result and message.author.mention == self.options.request.user
-        elif self.options.features.reply_to == "every human":
+        elif self.options.features.reply_to == "any human":
             result = result and not message.author.bot
         return result
 

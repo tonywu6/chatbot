@@ -169,7 +169,7 @@ class ChatCommands(Cog):
         preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),
         system_message: Optional[str] = None,
         timing: Timing = "immediately",
-        reply_to: ReplyTo = "you",
+        reply_to: ReplyTo = "initial user",
         model: ChatModel = "gpt-3.5-turbo-0301",
         temperature: float = 0.7,
         max_tokens: int | None = None,

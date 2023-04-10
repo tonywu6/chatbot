@@ -84,13 +84,13 @@ class ChatCompletionRequest(BaseModel):
         return False
 
 
-Timing = Literal["immediately", "only when mentioned"]
-ReplyTo = Literal["everyone", "every human", "you"]
+Timing = Literal["immediately", "when mentioned"]
+ReplyTo = Literal["anyone", "any human", "initial user"]
 
 
 class ChatFeatures(BaseModel):
     timing: Timing = "immediately"
-    reply_to: ReplyTo = "you"
+    reply_to: ReplyTo = "initial user"
 
 
 class ChatSessionOptions(BaseModel):

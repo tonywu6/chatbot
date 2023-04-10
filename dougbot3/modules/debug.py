@@ -90,7 +90,7 @@ async def serialize_message(interaction: Interaction, message: Message):
         info["reference"] = message.reference.jump_url
 
     info["mentions"] = {
-        "everyone": bool(message.mention_everyone),
+        "anyone": bool(message.mention_everyone),
         "roles": [r.mention for r in message.role_mentions],
         "users": [u.mention for u in message.mentions],
     }
