@@ -19,7 +19,6 @@ from dougbot3.modules.chat.models import (
     ChatMessage,
     ChatMessageType,
     ChatSessionOptions,
-    DiscordMessage,
 )
 from dougbot3.settings import AppSecrets
 from dougbot3.utils.config import load_settings
@@ -27,6 +26,7 @@ from dougbot3.utils.discord.color import Color2
 from dougbot3.utils.discord.embed import Embed2
 from dougbot3.utils.discord.file import discord_open
 from dougbot3.utils.discord.markdown import divide_text
+from dougbot3.utils.discord.typing import OutgoingMessage
 from dougbot3.utils.errors import (
     is_system_message,
     report_error,
@@ -99,7 +99,7 @@ class ChatSession:
         request.messages = self.all_messages
         return request
 
-    def to_atom(self) -> DiscordMessage:
+    def to_atom(self) -> OutgoingMessage:
         """Create a Discord message containing the session's config."""
         with discord_open("atom.yaml") as (stream, file):
             content = yaml.safe_dump(
@@ -114,7 +114,8 @@ class ChatSession:
             .set_title("Chat session")
             .set_description(
                 shorten(self.system_message, 4000, replace_whitespace=False)
-                or "(none)",
+                if self.system_message
+                else "(No system message)",
             )
             .add_field("Token usage", self.usage_description)
         )
@@ -311,7 +312,9 @@ class ChatSession:
         """
         return await self.splice_messages(message.id, message)
 
-    def prepare_replies(self, response: ChatCompletionResponse) -> list[DiscordMessage]:
+    def prepare_replies(
+        self, response: ChatCompletionResponse
+    ) -> list[OutgoingMessage]:
         """Parse an API response into a list of Discord messages.
 
         Long messages will be divided into chunks, splitting at new lines or
@@ -337,7 +340,7 @@ class ChatSession:
         tree = SyntaxTreeNode(tokens)
 
         lines = text.splitlines()
-        chunks: list[DiscordMessage] = []
+        chunks: list[OutgoingMessage] = []
 
         for node in tree.children:
             line_begin, line_end = node.map
@@ -359,10 +362,10 @@ class ChatSession:
                 ):
                     chunks.append({"content": sentences})
 
-        def is_rich_content(message: DiscordMessage) -> bool:
+        def is_rich_content(message: OutgoingMessage) -> bool:
             return message.get("embeds") or message.get("files")
 
-        results: list[DiscordMessage] = []
+        results: list[OutgoingMessage] = []
 
         for group in split_at(chunks, is_rich_content, keep_separator=True):
             if is_rich_content(group[0]):

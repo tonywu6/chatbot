@@ -13,6 +13,7 @@ from loguru import logger
 from dougbot3.utils.datetime import utcnow
 from dougbot3.utils.discord import Color2, Embed2
 from dougbot3.utils.discord.file import discord_open
+from dougbot3.utils.discord.typing import OutgoingMessage
 
 
 def system_message():
@@ -108,9 +109,9 @@ async def report_error(
     )
 
     with logger.catch(Exception):
-        response = {"embed": report, "view": ErrorReportView()}
+        response: OutgoingMessage = {"embeds": report, "view": ErrorReportView()}
         if tb:
-            response["file"] = [tb]
+            response["files"] = [tb]
         if interaction:
             response["ephemeral"] = True
             if interaction.response.is_done():

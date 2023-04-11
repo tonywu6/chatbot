@@ -1,7 +1,6 @@
 from enum import Enum
 from typing import Literal, Optional, TypedDict
 
-from discord import Embed, File
 from pydantic import BaseModel, Field
 
 ChatModel = Literal["gpt-3.5-turbo", "gpt-3.5-turbo-0301"]
@@ -96,9 +95,3 @@ class ChatFeatures(BaseModel):
 class ChatSessionOptions(BaseModel):
     request: ChatCompletionRequest
     features: ChatFeatures = Field(default_factory=ChatFeatures)
-
-
-class DiscordMessage(TypedDict):
-    content: Optional[str]
-    embeds: Optional[list[Embed]]
-    files: Optional[list[File]]
