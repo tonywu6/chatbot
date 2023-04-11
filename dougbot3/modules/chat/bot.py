@@ -37,6 +37,7 @@ from dougbot3.modules.chat.session import ChatSession
 from dougbot3.modules.chat.settings import ChatOptions
 from dougbot3.utils.config import load_settings
 from dougbot3.utils.discord import Embed2
+from dougbot3.utils.discord.checks import text_channel_only, thread_only
 from dougbot3.utils.discord.color import Color2
 from dougbot3.utils.discord.file import discord_open
 from dougbot3.utils.discord.transform import KeyOf
@@ -158,6 +159,7 @@ class ChatCommands(Cog):
         reply_to="Control to whose messages the bot will respond.",
     )
     @guild_only()
+    @text_channel_only
     @bot_has_permissions(
         view_channel=True,
         create_private_threads=True,
@@ -240,10 +242,8 @@ class ChatCommands(Cog):
 
     @command(name="stats", description="Get stats about the current chat.")
     @guild_only()
+    @thread_only
     async def stats(self, interaction: Interaction):
-        if not isinstance(interaction.channel, Thread):
-            raise UserInputError("This command can only be used in a thread.")
-
         session = await self.controller.ensure_session(interaction.channel)
 
         helper = ManageChatView(self.bot, self.controller)
@@ -256,10 +256,8 @@ class ChatCommands(Cog):
 
     @command(name="regenerate", description="Regenerate response.")
     @guild_only()
+    @thread_only
     async def regenerate(self, interaction: Interaction):
-        if not isinstance(interaction.channel, Thread):
-            raise UserInputError("This command can only be used in a thread.")
-
         session = await self.controller.ensure_session(interaction.channel)
 
         to_delete: list[int] = []

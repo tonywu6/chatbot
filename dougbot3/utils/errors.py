@@ -109,7 +109,7 @@ async def report_error(
     )
 
     with logger.catch(Exception):
-        response: OutgoingMessage = {"embeds": report, "view": ErrorReportView()}
+        response: OutgoingMessage = {"embeds": [report]}
         if tb:
             response["files"] = [tb]
         if interaction:
@@ -119,6 +119,7 @@ async def report_error(
             else:
                 await interaction.response.send_message(**response)
         if messageable:
+            response["view"] = ErrorReportView()
             await messageable.send(**response)
 
 
