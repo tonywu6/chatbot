@@ -8,6 +8,7 @@ from discord import (
     ChannelType,
     Interaction,
     Message,
+    Object as Snowflake,
     RawBulkMessageDeleteEvent,
     RawMessageDeleteEvent,
     RawMessageUpdateEvent,
@@ -253,6 +254,34 @@ class ChatCommands(Cog):
             ephemeral=True,
         )
 
+    @command(name="regenerate", description="Regenerate response.")
+    @guild_only()
+    async def regenerate(self, interaction: Interaction):
+        if not isinstance(interaction.channel, Thread):
+            raise UserInputError("This command can only be used in a thread.")
+
+        session = await self.controller.ensure_session(interaction.channel)
+
+        to_delete: list[int] = []
+
+        for message in reversed(session.messages):
+            if message.role == "system":
+                continue
+            if message.role != "assistant":
+                break
+            to_delete.append(message.message_id)
+
+        await interaction.response.defer(ephemeral=True)
+
+        await session.splice_messages(to_delete)
+        await interaction.channel.delete_messages([Snowflake(id=x) for x in to_delete])
+
+        async with session.editing:
+            pass
+
+        await interaction.delete_original_response()
+        await session.answer(interaction.channel)
+
     async def _delete_messages(self, channel_id: int, *message_ids: int):
         thread = self.bot.get_channel(channel_id)
         session = self.controller.get_session(thread)
@@ -278,7 +307,7 @@ class ChatCommands(Cog):
         send_notice = not message.author.bot
         session = await self.controller.ensure_session(thread, verbose=send_notice)
 
-        await session.answer(message)
+        await session.read_chat(message)
 
     @Cog.listener("on_raw_message_edit")
     async def on_raw_message_edit(self, payload: RawMessageUpdateEvent):
@@ -298,7 +327,7 @@ class ChatCommands(Cog):
 
         if before and before.flags.loading:
             # respond to edits due to command deferral
-            await session.answer(after)
+            await session.read_chat(after)
         else:
             # don't respond to regular message edits
             await session.process_request(after)

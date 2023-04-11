@@ -108,7 +108,9 @@ async def report_error(
     )
 
     with logger.catch(Exception):
-        response = {"embed": report, "file": tb, "view": ErrorReportView()}
+        response = {"embed": report, "view": ErrorReportView()}
+        if tb:
+            response["file"] = [tb]
         if interaction:
             response["ephemeral"] = True
             if interaction.response.is_done():

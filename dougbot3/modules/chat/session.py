@@ -50,7 +50,7 @@ class ChatSession:
         self.options = options
         self.messages: list[ChatMessage] = []
 
-        self._processing = asyncio.Lock()
+        self.editing = asyncio.Lock()
 
         self.token_usage: int = 0
         self.token_estimate: int = 0
@@ -274,7 +274,7 @@ class ChatSession:
         to_delete: int,
         to_insert: Message | None = None,
     ) -> bool:
-        async with self._processing:
+        async with self.editing:
             index = [*locate(self.messages, lambda m: m.message_id == to_delete)]
             if (
                 to_insert
@@ -452,14 +452,7 @@ class ChatSession:
             result = result and not message.author.bot
         return result
 
-    async def answer(self, message: Message | None = None):
-        new_message = await self.process_request(message)
-
-        if not new_message or not self.should_answer(message):
-            return
-
-        thread = message.channel
-
+    async def answer(self, thread: Thread):
         async with (
             self.maybe_update_title(thread),
             report_warnings(thread),
@@ -480,6 +473,14 @@ class ChatSession:
                 await thread.send(**reply)
 
             self.warn_about_token_limit()
+
+    async def read_chat(self, message: Message):
+        new_message = await self.process_request(message)
+
+        if not new_message or not self.should_answer(message):
+            return
+
+        await self.answer(message.channel)
 
     def warn_about_token_limit(self):
         limit = CHAT_MODEL_TOKEN_LIMITS[self.options.request.model]
