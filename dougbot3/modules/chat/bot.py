@@ -1,4 +1,6 @@
+from contextlib import asynccontextmanager
 from string import Template
+from textwrap import shorten
 from typing import Optional
 
 import arrow
@@ -62,9 +64,8 @@ CHAT_PRESETS: dict[str, list[ChatMessage]] = {
         ChatMessage(
             role="system",
             content="You are ChatGPT, a large language model trained by OpenAI."
-            " Answer as concisely as possible."
-            " You are answering questions from ${user} over Discord."
-            " Current date: ${current_date}",
+            " Answer as detailed as possible."
+            " You are answering questions from ${user} over Discord.",
         )
     ],
     "Empty": [],
@@ -169,6 +170,7 @@ class ChatCommands(Cog):
     async def chat(
         self,
         interaction: Interaction,
+        *,
         preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),
         system_message: Optional[str] = None,
         timing: Timing = "immediately",
@@ -201,13 +203,12 @@ class ChatCommands(Cog):
             "user": interaction.user.mention,
             "server": interaction.guild.name,
             "channel": thread.mention,
-            "current_date": arrow.now().format("YYYY-MM-DD HH:mm:ss ZZ"),
+            "current_date": arrow.now().format("YYYY-MM-DD"),
         }
         env["discord"] = (
             "You are talking to {user} over Discord."
             " Server name: {server}."
-            " Channel: {channel}."
-            " Current date: {current_date}"
+            " Channel: {channel}"
         ).format(**env)
 
         preset_dialog = []
@@ -280,13 +281,42 @@ class ChatCommands(Cog):
         await interaction.delete_original_response()
         await session.answer(interaction.channel)
 
+    @command(name="ask", description="Generate a one-shot response.")
+    @describe(model="The GPT model to use.")
+    async def ask(
+        self,
+        interaction: Interaction,
+        *,
+        text: str,
+        model: ChatModel = "gpt-3.5-turbo-0301",
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ):
+        session = ChatSession(
+            assistant=self.bot.user.mention,
+            options=ChatSessionOptions(
+                request=ChatCompletionRequest(
+                    user=interaction.user.mention,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    messages=[ChatMessage(role="user", content=text)],
+                ),
+            ),
+        )
+        user = interaction.user.mention
+        await interaction.response.defer()
+        await session.answer(interaction.channel)
+        await interaction.edit_original_response(content=f"{user} asked: {text}")
+
     async def _delete_messages(self, channel_id: int, *message_ids: int):
         thread = self.bot.get_channel(channel_id)
         session = self.controller.get_session(thread)
         if not session:
             return
-        for message in message_ids:
-            await session.splice_messages(message)
+        async with session.editing:
+            for message in message_ids:
+                await session.splice_messages(message)
 
     @Cog.listener("on_raw_message_delete")
     async def on_raw_message_delete(self, payload: RawMessageDeleteEvent):
@@ -295,6 +325,30 @@ class ChatCommands(Cog):
     @Cog.listener("on_raw_bulk_message_delete")
     async def on_raw_bulk_message_delete(self, payload: RawBulkMessageDeleteEvent):
         await self._delete_messages(payload.channel_id, *payload.message_ids)
+
+    @classmethod
+    @asynccontextmanager
+    async def maybe_update_thread_name(cls, session: ChatSession, channel: Thread):
+        def response_count():
+            return len([*filter(lambda m: m.role == "assistant", session.messages)])
+
+        if response_count() > 0:
+            try:
+                yield
+            finally:
+                pass
+            return
+
+        try:
+            yield
+        except Exception:
+            pass
+        else:
+            if response_count() == 0:
+                return
+            title = await session.write_title()
+            if title:
+                await channel.edit(name=shorten(title, 100, placeholder="..."))
 
     @Cog.listener("on_message")
     async def on_message(self, message: Message):
@@ -305,7 +359,8 @@ class ChatCommands(Cog):
         send_notice = not message.author.bot
         session = await self.controller.ensure_session(thread, verbose=send_notice)
 
-        await session.read_chat(message)
+        async with session.editing, self.maybe_update_thread_name(session, thread):
+            await session.read_chat(message)
 
     @Cog.listener("on_raw_message_edit")
     async def on_raw_message_edit(self, payload: RawMessageUpdateEvent):
@@ -323,12 +378,13 @@ class ChatCommands(Cog):
         except Exception:
             return
 
-        if before and before.flags.loading:
-            # respond to edits due to command deferral
-            await session.read_chat(after)
-        else:
-            # don't respond to regular message edits
-            await session.process_request(after)
+        async with session.editing:
+            if before and before.flags.loading:
+                # respond to edits due to command deferral
+                await session.read_chat(after)
+            else:
+                # don't respond to regular message edits
+                await session.process_request(after)
 
 
 async def setup(bot: Bot) -> None:

@@ -6,7 +6,7 @@ from pydantic import BaseModel, BaseSettings, SecretStr
 from dougbot3.utils.config import use_settings_file
 
 DEFAULT_INTENTS = Intents.all() ^ Intents(Intents.typing.flag | Intents.presences.flag)
-DEFAULT_MENTIONS = AllowedMentions(everyone=False, roles=False, users=False)
+DEFAULT_MENTIONS = AllowedMentions(everyone=False, roles=False, users=True)
 
 
 class _Intents(Intents):

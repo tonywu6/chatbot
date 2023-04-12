@@ -1,11 +1,11 @@
 import asyncio
 import warnings
-from contextlib import asynccontextmanager
 from textwrap import shorten
 
 import openai
 import yaml
 from discord import Attachment, Embed, Message, MessageType, Thread
+from discord.abc import Messageable
 from loguru import logger
 from markdown_it import MarkdownIt
 from markdown_it.tree import SyntaxTreeNode
@@ -151,12 +151,13 @@ class ChatSession:
 
         async for message in thread.history(oldest_first=True):
             if session:
-                await session.process_request(message)
+                async with session.editing:
+                    await session.process_request(message)
                 continue
 
             try:
                 options = await get_options(message)
-                logger.info("Chat {0}: found options", options)
+                logger.info("Chat {0}: found options {1}", thread.mention, options)
                 assistant = message.author.mention
                 session = cls(assistant=assistant, options=options)
             except ValueError:
@@ -246,7 +247,7 @@ class ChatSession:
 
         if message.type == MessageType.chat_input_command and message.interaction:
             invoker = message.interaction.user.mention
-            action = f"the /{message.interaction.name} command"
+            action = f"/{message.interaction.name} command from {author.mention}"
             messages.append(ChatMessage(role=role, content=f"{invoker} used {action}"))
 
         if message.content:
@@ -275,29 +276,28 @@ class ChatSession:
         to_delete: int,
         to_insert: Message | None = None,
     ) -> bool:
-        async with self.editing:
-            index = [*locate(self.messages, lambda m: m.message_id == to_delete)]
-            if (
-                to_insert
-                and not to_insert.flags.loading
-                and not is_system_message(to_insert)
-            ):
-                updated = await self.parse_message(
-                    self.options.request.user,
-                    self.assistant,
-                    to_insert,
-                )
-            else:
-                updated = []
-            if not index:
-                removed = []
-                self.messages.extend(updated)
-            else:
-                removed_slice = slice(min(index), max(index) + 1)
-                removed = self.messages[removed_slice]
-                self.messages[removed_slice] = updated
-            self.estimate_token_usage(removed=removed, added=updated)
-            return bool(updated)
+        index = [*locate(self.messages, lambda m: m.message_id == to_delete)]
+        if (
+            to_insert
+            and not to_insert.flags.loading
+            and not is_system_message(to_insert)
+        ):
+            updated = await self.parse_message(
+                self.options.request.user,
+                self.assistant,
+                to_insert,
+            )
+        else:
+            updated = []
+        if not index:
+            removed = []
+            self.messages.extend(updated)
+        else:
+            removed_slice = slice(min(index), max(index) + 1)
+            removed = self.messages[removed_slice]
+            self.messages[removed_slice] = updated
+        self.estimate_token_usage(removed=removed, added=updated)
+        return bool(updated)
 
     async def process_request(self, message: Message) -> bool:
         """Parse a Discord message and add it to the chain.
@@ -313,7 +313,8 @@ class ChatSession:
         return await self.splice_messages(message.id, message)
 
     def prepare_replies(
-        self, response: ChatCompletionResponse
+        self,
+        response: ChatCompletionResponse,
     ) -> list[OutgoingMessage]:
         """Parse an API response into a list of Discord messages.
 
@@ -388,63 +389,6 @@ class ChatSession:
 
         return results
 
-    async def write_title(self):
-        session = ChatSession(
-            assistant="assistant",
-            options=ChatSessionOptions(
-                request=ChatCompletionRequest(max_tokens=256, temperature=0),
-            ),
-        )
-        messages: list[str] = [
-            f"{m.role}: {m.content}" for m in self.messages if m.role != "system"
-        ]
-        session.messages.append(
-            ChatMessage(
-                role="user",
-                content="Write an eye-catching slug that best characterizes"
-                " the topic of the following conversation,"
-                " as if you are writing an article title."
-                " Your slug should be in the conversation's original language."
-                " Respond with just the topic itself."
-                " Do not put quotation marks or periods in your response.",
-            ),
-        )
-        session.messages.append(
-            ChatMessage(role="user", content="\n".join(messages)),
-        )
-        try:
-            response = await session.fetch()
-        except Exception as e:
-            await report_error(e)
-            return
-        answer = first(session.prepare_replies(response), None)
-        if answer:
-            return answer.get("content") or None
-        return None
-
-    @asynccontextmanager
-    async def maybe_update_title(self, channel: Thread):
-        def response_count():
-            return len([*filter(lambda m: m.role == "assistant", self.messages)])
-
-        if response_count() > 0:
-            try:
-                yield
-            finally:
-                pass
-            return
-
-        try:
-            yield
-        except Exception:
-            pass
-        else:
-            if response_count() == 0:
-                return
-            title = await self.write_title()
-            if title:
-                await channel.edit(name=title)
-
     def should_answer(self, message: Message):
         result = not message.author.mention == self.assistant
         if self.options.features.timing == "when mentioned":
@@ -455,35 +399,32 @@ class ChatSession:
             result = result and not message.author.bot
         return result
 
-    async def answer(self, thread: Thread):
-        async with (
-            self.maybe_update_title(thread),
-            report_warnings(thread),
-            thread.typing(),
-        ):
-            logger.info("Chat {0}: sending API request", thread.mention)
+    async def answer(self, channel: Messageable) -> bool:
+        async with channel.typing(), report_warnings(channel):
+            logger.info("Sending API request")
 
             try:
                 response = await self.fetch()
             except Exception as e:
-                await report_error(e, messageable=thread)
-                return
+                await report_error(e, messageable=channel)
+                return False
 
             replies = self.prepare_replies(response)
-            logger.info("Chat {0}: resolved {1} replies", thread.mention, len(replies))
+            logger.info("Resolved {0} replies", len(replies))
 
             for reply in replies:
-                await thread.send(**reply)
+                await channel.send(**reply)
 
             self.warn_about_token_limit()
+            return True
 
-    async def read_chat(self, message: Message):
+    async def read_chat(self, message: Message) -> bool:
         new_message = await self.process_request(message)
 
         if not new_message or not self.should_answer(message):
-            return
+            return False
 
-        await self.answer(message.channel)
+        return await self.answer(message.channel)
 
     def warn_about_token_limit(self):
         limit = CHAT_MODEL_TOKEN_LIMITS[self.options.request.model]
@@ -493,3 +434,36 @@ class ChatSession:
                 f"Token usage is at {percentage * 100:.0f}% of the model's limit.",
                 stacklevel=2,
             )
+
+    async def write_title(self):
+        ad_hoc = ChatSession(
+            assistant="assistant",
+            options=ChatSessionOptions(
+                request=ChatCompletionRequest(max_tokens=256, temperature=0),
+            ),
+        )
+        messages: list[str] = [
+            f"{m.role}: {m.content}" for m in self.messages if m.role != "system"
+        ]
+        ad_hoc.messages.append(
+            ChatMessage(
+                role="user",
+                content="Role: Copy-editor"
+                "\nTask: Write a headline that best captures the following conversation."
+                "\nRequirement: Headline should be in the conversation's original language;"
+                " No quotation marks."
+                " Must be a single sentence or phrase."
+                "\nConversation:"
+                "\n" + "\n".join(messages),
+            ),
+        )
+        ad_hoc.messages.append(ChatMessage(role="user", content="Answer:"))
+        try:
+            response = await ad_hoc.fetch()
+        except Exception as e:
+            await report_error(e)
+            return
+        answer = first(ad_hoc.prepare_replies(response), None)
+        if answer:
+            return answer.get("content") or None
+        return None
