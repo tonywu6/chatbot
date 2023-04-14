@@ -26,6 +26,7 @@ from loguru import logger
 from more_itertools import first
 
 from chatbot.modules.chat.controller import ChatController
+from chatbot.modules.chat.helpers import ensure_chat_owner
 from chatbot.modules.chat.models import (
     ChatCompletionRequest,
     ChatFeatures,
@@ -107,6 +108,8 @@ class ManageChatView(DefaultView):
         await interaction.response.defer(thinking=True, ephemeral=True)
         session = await self.controller.ensure_session(channel)
 
+        ensure_chat_owner(interaction, session)
+
         title = await session.write_title()
         if title:
             await channel.edit(name=title)
@@ -136,8 +139,12 @@ class ManageChatView(DefaultView):
     @button(label="End chat", style=ButtonStyle.red, custom_id="manage_chat:end_chat")
     async def end_chat(self, interaction: Interaction, button: Button = None):
         channel = interaction.channel
-        if not channel:
+        if not isinstance(channel, Thread):
             return
+
+        session = await self.controller.ensure_session(channel, refresh=True)
+        ensure_chat_owner(interaction, session)
+
         await channel.delete()
         self.controller.delete_session(channel)
         logger.info("Chat {0}: ended.", channel.mention)

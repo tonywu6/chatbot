@@ -1,14 +1,26 @@
 import asyncio
-from typing import Any, Awaitable, Generic, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Awaitable, Generic, Optional, TypeVar
 
 import tiktoken
 from attr import dataclass
+from discord import Interaction
+from discord.ext.commands import UserInputError
 from loguru import logger
 from more_itertools import flatten
 
 from chatbot.modules.chat.models import ChatMessage
 
+if TYPE_CHECKING:
+    from chatbot.modules.chat.session import ChatSession
+
 T = TypeVar("T")
+
+
+def ensure_chat_owner(interaction: "Interaction", session: "ChatSession"):
+    if interaction.user.mention != session.options.request.user:
+        raise UserInputError(
+            "Only the user who started this chat can perform this action."
+        )
 
 
 @dataclass

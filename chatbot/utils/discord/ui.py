@@ -6,7 +6,7 @@ from chatbot.utils.errors import report_error
 
 class DefaultView(View):
     async def on_error(self, interaction: Interaction, error: Exception, item) -> None:
-        return await report_error(error, messageable=interaction.channel)
+        return await report_error(error, interaction=interaction)
 
 
 class ErrorReportView(DefaultView):
