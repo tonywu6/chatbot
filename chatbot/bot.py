@@ -12,11 +12,11 @@ from discord.ext.commands import Bot, CommandError, Context
 from discord.utils import oauth_url
 from loguru import logger
 
-from dougbot3 import modules
-from dougbot3.settings import BotSettings
-from dougbot3.utils.config import load_settings
-from dougbot3.utils.discord.ui import ErrorReportView
-from dougbot3.utils.errors import report_error
+from chatbot import modules
+from chatbot.settings import BotSettings
+from chatbot.utils.config import load_settings
+from chatbot.utils.discord.ui import ErrorReportView
+from chatbot.utils.errors import report_error
 
 BOT_SETTINGS = load_settings(BotSettings)
 

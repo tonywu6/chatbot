@@ -11,8 +11,8 @@ from markdown_it import MarkdownIt
 from markdown_it.tree import SyntaxTreeNode
 from more_itertools import constrained_batches, first, locate, split_at
 
-from dougbot3.modules.chat.helpers import num_tokens_from_messages
-from dougbot3.modules.chat.models import (
+from chatbot.modules.chat.helpers import num_tokens_from_messages
+from chatbot.modules.chat.models import (
     CHAT_MODEL_TOKEN_LIMITS,
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -20,14 +20,14 @@ from dougbot3.modules.chat.models import (
     ChatMessageType,
     ChatSessionOptions,
 )
-from dougbot3.settings import AppSecrets
-from dougbot3.utils.config import load_settings
-from dougbot3.utils.discord.color import Color2
-from dougbot3.utils.discord.embed import Embed2
-from dougbot3.utils.discord.file import discord_open
-from dougbot3.utils.discord.markdown import divide_text
-from dougbot3.utils.discord.typing import OutgoingMessage
-from dougbot3.utils.errors import (
+from chatbot.settings import AppSecrets
+from chatbot.utils.config import load_settings
+from chatbot.utils.discord.color import Color2
+from chatbot.utils.discord.embed import Embed2
+from chatbot.utils.discord.file import discord_open
+from chatbot.utils.discord.markdown import divide_text
+from chatbot.utils.discord.typing import OutgoingMessage
+from chatbot.utils.errors import (
     is_system_message,
     report_error,
     report_warnings,

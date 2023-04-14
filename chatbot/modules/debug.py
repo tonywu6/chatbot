@@ -6,11 +6,11 @@ from discord import Interaction, Message
 from discord.app_commands import Choice, Group, choices, context_menu
 from discord.ext.commands import Bot, Cog
 
-from dougbot3.utils.datetime import utcnow
-from dougbot3.utils.discord.embed import Embed2
-from dougbot3.utils.discord.file import discord_open
-from dougbot3.utils.discord.markdown import code, pre
-from dougbot3.utils.errors import unbound_error_handler
+from chatbot.utils.datetime import utcnow
+from chatbot.utils.discord.embed import Embed2
+from chatbot.utils.discord.file import discord_open
+from chatbot.utils.discord.markdown import code, pre
+from chatbot.utils.errors import unbound_error_handler
 
 
 class DebugCommands(Cog):

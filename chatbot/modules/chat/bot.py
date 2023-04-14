@@ -25,8 +25,8 @@ from faker import Faker
 from loguru import logger
 from more_itertools import first
 
-from dougbot3.modules.chat.controller import ChatController
-from dougbot3.modules.chat.models import (
+from chatbot.modules.chat.controller import ChatController
+from chatbot.modules.chat.models import (
     ChatCompletionRequest,
     ChatFeatures,
     ChatMessage,
@@ -35,16 +35,16 @@ from dougbot3.modules.chat.models import (
     ReplyTo,
     Timing,
 )
-from dougbot3.modules.chat.session import ChatSession
-from dougbot3.modules.chat.settings import ChatOptions
-from dougbot3.utils.config import load_settings
-from dougbot3.utils.discord import Embed2
-from dougbot3.utils.discord.checks import text_channel_only, thread_only
-from dougbot3.utils.discord.color import Color2
-from dougbot3.utils.discord.file import discord_open
-from dougbot3.utils.discord.transform import KeyOf
-from dougbot3.utils.discord.ui import DefaultView
-from dougbot3.utils.errors import system_message
+from chatbot.modules.chat.session import ChatSession
+from chatbot.modules.chat.settings import ChatOptions
+from chatbot.utils.config import load_settings
+from chatbot.utils.discord import Embed2
+from chatbot.utils.discord.checks import text_channel_only, thread_only
+from chatbot.utils.discord.color import Color2
+from chatbot.utils.discord.file import discord_open
+from chatbot.utils.discord.transform import KeyOf
+from chatbot.utils.discord.ui import DefaultView
+from chatbot.utils.errors import system_message
 
 CHAT_OPTIONS = load_settings(ChatOptions)
 

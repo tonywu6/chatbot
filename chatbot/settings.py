@@ -3,7 +3,7 @@ from typing import Callable
 from discord import AllowedMentions, Intents
 from pydantic import BaseModel, BaseSettings, SecretStr
 
-from dougbot3.utils.config import use_settings_file
+from chatbot.utils.config import use_settings_file
 
 DEFAULT_INTENTS = Intents.all() ^ Intents(Intents.typing.flag | Intents.presences.flag)
 DEFAULT_MENTIONS = AllowedMentions(everyone=False, roles=False, users=True)

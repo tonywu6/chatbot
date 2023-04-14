@@ -1,7 +1,7 @@
 from discord import Interaction
 from discord.abc import Messageable
 
-from dougbot3.utils.discord.typing import OutgoingMessage
+from chatbot.utils.discord.typing import OutgoingMessage
 
 Answerable = Messageable | Interaction
 

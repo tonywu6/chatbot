@@ -9,7 +9,7 @@ import yaml
 from discord import Colour, Embed, Guild, Member, User
 from discord.types.embed import EmbedType
 
-from dougbot3.utils.discord.markdown import unwrap_codeblock
+from chatbot.utils.discord.markdown import unwrap_codeblock
 
 T = TypeVar("T")
 

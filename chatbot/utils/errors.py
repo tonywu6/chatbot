@@ -10,10 +10,10 @@ from discord.app_commands import errors as app_cmd_errors
 from discord.ext.commands import errors as ext_cmd_errors
 from loguru import logger
 
-from dougbot3.utils.datetime import utcnow
-from dougbot3.utils.discord import Color2, Embed2
-from dougbot3.utils.discord.file import discord_open
-from dougbot3.utils.discord.typing import OutgoingMessage
+from chatbot.utils.datetime import utcnow
+from chatbot.utils.discord import Color2, Embed2
+from chatbot.utils.discord.file import discord_open
+from chatbot.utils.discord.typing import OutgoingMessage
 
 
 def system_message():
@@ -29,7 +29,7 @@ def is_system_message(message: Message):
 
 @asynccontextmanager
 async def report_warnings(messageable: Messageable):
-    from dougbot3.utils.discord.ui import ErrorReportView
+    from chatbot.utils.discord.ui import ErrorReportView
 
     with warnings.catch_warnings(record=True) as messages:
         try:
@@ -52,7 +52,7 @@ async def report_error(
     interaction: Interaction | None = None,
     messageable: Messageable | None = None,
 ):
-    from dougbot3.utils.discord.ui import ErrorReportView
+    from chatbot.utils.discord.ui import ErrorReportView
 
     error = getattr(error, "original", None) or error.__cause__ or error
 

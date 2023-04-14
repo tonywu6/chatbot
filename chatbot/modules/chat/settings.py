@@ -1,7 +1,7 @@
 from pydantic import BaseSettings
 
-from dougbot3.modules.chat.models import ChatMessage
-from dougbot3.utils.config import use_settings_file
+from chatbot.modules.chat.models import ChatMessage
+from chatbot.utils.config import use_settings_file
 
 
 class ChatOptions(BaseSettings):

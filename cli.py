@@ -5,10 +5,10 @@ import click
 import watchfiles
 from loguru import logger
 
-from dougbot3.bot import create_bot
-from dougbot3.settings import AppSecrets
-from dougbot3.utils.config import load_settings
-from dougbot3.utils.logging import configure_logging
+from chatbot.bot import create_bot
+from chatbot.settings import AppSecrets
+from chatbot.utils.config import load_settings
+from chatbot.utils.logging import configure_logging
 
 SECRETS = load_settings(AppSecrets)
 

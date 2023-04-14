@@ -6,7 +6,7 @@ from attr import dataclass
 from loguru import logger
 from more_itertools import flatten
 
-from dougbot3.modules.chat.models import ChatMessage
+from chatbot.modules.chat.models import ChatMessage
 
 T = TypeVar("T")
 

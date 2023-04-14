@@ -1,9 +1,9 @@
 from discord import Thread
 from discord.ext.commands import UserInputError
 
-from dougbot3.modules.chat.helpers import IdempotentTasks
-from dougbot3.modules.chat.session import ChatSession
-from dougbot3.utils.errors import system_message
+from chatbot.modules.chat.helpers import IdempotentTasks
+from chatbot.modules.chat.session import ChatSession
+from chatbot.utils.errors import system_message
 
 
 class ChatController:

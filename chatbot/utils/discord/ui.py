@@ -1,7 +1,7 @@
 from discord import Interaction
 from discord.ui import View, button
 
-from dougbot3.utils.errors import report_error
+from chatbot.utils.errors import report_error
 
 
 class DefaultView(View):
