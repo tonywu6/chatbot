@@ -42,9 +42,9 @@ Messages from Discord will look like:
 
 Text attachments will have their content included.
 
-Embeds are sent as a Markdown document, for example:
+Embeds are sent as Markdown documents, for example:
 
-```md
+```markdown
 ---
 source: The New York Times <https://www.nytimes.com/>
 author: By Noam Chomsky, Ian Roberts and Jeffrey Watumull
