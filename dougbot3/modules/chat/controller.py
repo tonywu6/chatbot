@@ -35,7 +35,9 @@ class ChatController:
             raise UserInputError("Invalid chat thread.")
 
         if verbose:
-            notice = system_message().set_description("Rebuilding chat history ...")
+            notice = system_message().set_description(
+                "Rebuilding chat history. Please wait"
+            )
             await thread.send(embed=notice, delete_after=10)
 
         task = ChatSession.from_thread(thread)

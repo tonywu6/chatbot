@@ -464,6 +464,8 @@ class Embed2:
         :return: The resulting embed.
         :rtype: :class:`Embed2`
         """
+        if not user.avatar:
+            return self.set_author(name=str(user))
         return self.set_author(name=str(user), icon_url=user.avatar.url)
 
     def use_member_color(self, member: Member):
@@ -486,7 +488,10 @@ class Embed2:
         :return: The resulting embed.
         :rtype: :class:`Embed2`
         """
-        author = EmbedAuthor(name=str(person), url=url, icon_url=person.avatar.url)
+        if not person.avatar:
+            author = EmbedAuthor(name=str(person), url=url)
+        else:
+            author = EmbedAuthor(name=str(person), url=url, icon_url=person.avatar.url)
         return attr.evolve(self, author=author, color=person.color)
 
     def decorated(self, guild: Guild, *, url: str = _EMPTY):
@@ -497,7 +502,10 @@ class Embed2:
         :return: The resulting embed.
         :rtype: :class:`Embed2`
         """
-        author = EmbedAuthor(name=str(guild), url=url, icon_url=guild.icon.url)
+        if not guild.icon:
+            author = EmbedAuthor(name=str(guild), url=url)
+        else:
+            author = EmbedAuthor(name=str(guild), url=url, icon_url=guild.icon.url)
         return attr.evolve(self, author=author)
 
     def set_author_url(self, url: str | None) -> "Embed2":

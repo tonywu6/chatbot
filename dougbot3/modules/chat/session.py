@@ -65,6 +65,11 @@ class ChatSession:
         ]
 
     @property
+    def conversational_messages(self) -> list[ChatMessage]:
+        """Create a list of all messages excluding system messages."""
+        return [*filter(lambda m: m.role != "system", self.all_messages)]
+
+    @property
     def usage_description(self) -> str:
         if self.token_usage != self.token_estimate:
             return f"{self.token_count_upper_bound} (estimated)"
@@ -442,21 +447,19 @@ class ChatSession:
                 request=ChatCompletionRequest(max_tokens=256, temperature=0),
             ),
         )
-        messages: list[str] = [
-            f"{m.role}: {m.content}" for m in self.messages if m.role != "system"
-        ]
-        ad_hoc.messages.append(
-            ChatMessage(
-                role="user",
-                content="Role: Copy-editor"
-                "\nTask: Write a headline that best captures the following conversation."
-                "\nRequirement: Headline should be in the conversation's original language;"
-                " No quotation marks."
-                " Must be a single sentence or phrase."
-                "\nConversation:"
-                "\n" + "\n".join(messages),
-            ),
+        prompt = (
+            "Role: Copy editor"
+            "\nTask: Write a headline that best captures the following conversation."
+            "\nRequirements: Should be in the conversation's original language;"
+            " Must be a single sentence or phrase;"
+            " Must not contain quotation marks."
+            "\nConversation:"
         )
+        messages = "\n".join(
+            [f"{m.role}: {m.content}" for m in self.messages if m.role != "system"]
+        )
+        ad_hoc.messages.append(ChatMessage(role="user", content=prompt))
+        ad_hoc.messages.append(ChatMessage(role="user", content=messages))
         ad_hoc.messages.append(ChatMessage(role="user", content="Answer:"))
         try:
             response = await ad_hoc.fetch()

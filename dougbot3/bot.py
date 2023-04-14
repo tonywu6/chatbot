@@ -63,12 +63,13 @@ async def create_bot():
 
     @bot.listen()
     async def on_ready():
-        invite_url = oauth_url(
-            bot.user.id,
-            permissions=Permissions(532576324672),
-            scopes=["bot", "applications.commands"],
-        )
-        logger.info("Invite URL: {0}", invite_url)
+        if bot.user:
+            invite_url = oauth_url(
+                bot.user.id,
+                permissions=Permissions(532576324672),
+                scopes=["bot", "applications.commands"],
+            )
+            logger.info("Invite URL: {0}", invite_url)
 
     @bot.tree.error
     async def on_app_command_error(interaction: Interaction, error: AppCommandError):
