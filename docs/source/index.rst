@@ -8,23 +8,25 @@ chatbot
 Commands
 --------
 
-``run``
+``python cli.py run``
     Run the bot.
 
-``sync-commands``
+``python cli.py sync-commands``
     Sync commands with Discord. See :external:class:`Discord.py's documentation <discord.app_commands.CommandTree>`
     for more information.
 
 Configuration
 -------------
 
-.. autoclass:: chatbot.settings.AppSecrets
+.. currentmodule:: chatbot.settings
+
+.. autoclass:: AppSecrets
     :members:
 
-.. autoclass:: chatbot.settings.BotSettings
+.. autoclass:: BotSettings
     :members:
 
-.. autoclass:: chatbot.settings.BotOptions
+.. autoclass:: BotOptions
     :members:
 
 

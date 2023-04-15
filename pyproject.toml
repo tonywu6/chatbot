@@ -1,51 +1,55 @@
 [tool.poetry]
-name = "dougbot3"
-version = "0.1.0"
-description = ""
 authors = ["Tony Wu <tonywu6@protonmail.com>"]
+description = ""
 license = "AGPL-3.0-or-later"
+name = "dougbot3"
 readme = "README.md"
+version = "0.1.0"
 
 [tool.poetry.dependencies]
-python = "^3.11"
-pydantic = "^1.10.7"
-discord-py = "^2.2.2"
-openai = "^0.27.2"
-toml = "^0.10.2"
-loguru = "^0.6.0"
-click = "^8.1.3"
+arrow = "^1.2.3"
 attrs = "^22.2.0"
+click = "^8.1.3"
+discord-py = "^2.2.2"
 emoji = "^2.2.0"
 faker = "^18.4.0"
-psutil = "^5.9.4"
-orjson = "^3.8.9"
+loguru = "^0.6.0"
 markdown-it-py = "^2.2.0"
 more-itertools = "^9.1.0"
+openai = "^0.27.2"
+orjson = "^3.8.9"
+psutil = "^5.9.4"
+pydantic = "^1.10.7"
+python = "^3.11"
 python-slugify = "^8.0.1"
-arrow = "^1.2.3"
 tiktoken = "^0.3.3"
+toml = "^0.10.2"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
 flake8 = "^6.0.0"
 flake8-bugbear = "^23.3.23"
 flake8-docstrings = "^1.7.0"
+flake8-isort = "^6.0.0"
 flake8-string-format = "^0.3.0"
 flake8-tidy-imports = "^4.8.0"
 flake8-todo = "^0.7"
-flake8-isort = "^6.0.0"
 pep8-naming = "^0.13.3"
 pre-commit = "^3.2.1"
 watchfiles = "^0.19.0"
 
+[tool.poetry.group.docs.dependencies]
+sphinx = "^6.1.3"
+sphinx-rtd-theme = "^1.2.0"
+
 [build-system]
-requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core"]
 
 [tool.isort]
-multi_line_output = 3
+atomic = true
 case_sensitive = true
 combine_as_imports = true
+include_trailing_comma = true
 line_length = 88
-atomic = true
-include_trailing_comma=true
+multi_line_output = 3
