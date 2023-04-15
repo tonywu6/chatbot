@@ -2,7 +2,6 @@ import asyncio
 from contextlib import suppress
 
 import click
-import watchfiles
 from loguru import logger
 
 from chatbot.bot import create_bot
@@ -22,6 +21,8 @@ def cli(debug: bool = False, log_file: str | None = None):
 @click.option("--autoreload", is_flag=True, default=False, help="Enable auto-reload.")
 def run(autoreload: bool = False):
     if autoreload:
+        import watchfiles
+
         watch_filter = watchfiles.PythonFilter(
             extra_extensions=[".tmp"],
             ignore_paths=["instance"],
