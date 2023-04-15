@@ -1344,7 +1344,7 @@ unidecode = ["Unidecode (>=1.1.1)"]
 name = "pyyaml"
 version = "6.0"
 description = "YAML parser and emitter for Python"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.6"
 files = [
@@ -1982,4 +1982,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "103ff8956412a382b2d4e0cb9c80c9ef6ac5bc687cf428c0319536b57690fec6"
+content-hash = "ff18a27eb2a3ddd973b53ef8b001d2e41d677787b7d1b7709db395f363391801"
