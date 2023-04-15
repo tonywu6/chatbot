@@ -47,32 +47,6 @@ from chatbot.utils.discord.transform import KeyOf
 from chatbot.utils.discord.ui import DefaultView
 from chatbot.utils.errors import system_message
 
-CHAT_OPTIONS = load_settings(ChatOptions)
-
-CHAT_PRESETS: dict[str, list[ChatMessage]] = {
-    "Discord bot": [
-        ChatMessage(role="system", content="Your name is ${assistant}. ${discord}.")
-    ],
-    "Insightful assistant": [
-        ChatMessage(
-            role="system",
-            content="You are an insightful assistant."
-            " You like to provide detailed responses to questions."
-            " Your name is ${assistant}. ${discord}.",
-        )
-    ],
-    "ChatGPT": [
-        ChatMessage(
-            role="system",
-            content="You are ChatGPT, a large language model trained by OpenAI."
-            " Answer as detailed as possible."
-            " You are answering questions from ${user} over Discord.",
-        )
-    ],
-    "Empty": [],
-    **CHAT_OPTIONS.presets,
-}
-
 
 class ManageChatView(DefaultView):
     def __init__(self, bot: Bot, controller: ChatController = None):
@@ -151,6 +125,32 @@ class ManageChatView(DefaultView):
 
 
 class ChatCommands(Cog):
+    CHAT_OPTIONS = load_settings(ChatOptions)
+
+    CHAT_PRESETS: dict[str, list[ChatMessage]] = {
+        "Discord bot": [
+            ChatMessage(role="system", content="Your name is ${assistant}. ${discord}.")
+        ],
+        "Insightful assistant": [
+            ChatMessage(
+                role="system",
+                content="You are an insightful assistant."
+                " You like to provide detailed responses to questions."
+                " Your name is ${assistant}. ${discord}.",
+            )
+        ],
+        "ChatGPT": [
+            ChatMessage(
+                role="system",
+                content="You are ChatGPT, a large language model trained by OpenAI."
+                " Answer as detailed as possible."
+                " You are answering questions from ${user} over Discord.",
+            )
+        ],
+        "Empty": [],
+        **CHAT_OPTIONS.presets,
+    }
+
     def __init__(self, bot: Bot) -> None:
         self.controller = ChatController()
         self.bot = bot
@@ -227,7 +227,7 @@ class ChatCommands(Cog):
         else:
             preset_dialog = [
                 m.copy(update={"content": Template(m.content).safe_substitute(env)})
-                for m in CHAT_PRESETS.get(preset, [])
+                for m in self.CHAT_PRESETS.get(preset, [])
             ]
 
         atom = ChatSessionOptions(

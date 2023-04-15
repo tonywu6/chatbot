@@ -10,8 +10,6 @@ from chatbot.settings import AppSecrets
 from chatbot.utils.config import load_settings
 from chatbot.utils.logging import configure_logging
 
-SECRETS = load_settings(AppSecrets)
-
 
 @click.group()
 @click.option("--debug", is_flag=True, default=False)
@@ -62,4 +60,5 @@ def sync_commands():
 
 
 if __name__ == "__main__":
+    SECRETS = load_settings(AppSecrets)
     cli()

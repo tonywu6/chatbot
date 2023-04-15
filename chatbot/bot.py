@@ -18,8 +18,6 @@ from chatbot.utils.config import load_settings
 from chatbot.utils.discord.ui import ErrorReportView
 from chatbot.utils.errors import report_error
 
-BOT_SETTINGS = load_settings(BotSettings)
-
 
 def find_extensions(entry: ModuleType) -> frozenset[str]:
     def ignore_module(module: pkgutil.ModuleInfo) -> bool:
@@ -54,7 +52,9 @@ async def load_all_extensions(bot: Bot, extensions: Iterable[str]) -> None:
 
 
 async def create_bot():
-    options = BOT_SETTINGS.bot_options.dict()
+    settings = load_settings(BotSettings)
+
+    options = settings.bot_options.dict()
 
     bot = Bot(**options)
 
@@ -82,7 +82,7 @@ async def create_bot():
     @bot.event
     async def on_error(event: str, *args, **kwargs):
         exc_t, exc, tb = sys.exc_info()
-        channel = bot.get_channel(BOT_SETTINGS.error_report_channel)
+        channel = bot.get_channel(settings.error_report_channel)
         await report_error(exc, messageable=channel)
 
     bot.add_view(ErrorReportView())

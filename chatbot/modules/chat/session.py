@@ -34,12 +34,12 @@ from chatbot.utils.errors import (
     system_message,
 )
 
-SECRETS = load_settings(AppSecrets)
-
 MAX_MESSAGE_LENGTH = 1996
 
 
 class ChatSession:
+    SECRETS = load_settings(AppSecrets)
+
     def __init__(
         self,
         assistant: str,
@@ -136,7 +136,7 @@ class ChatSession:
             )
         return await openai.ChatCompletion.acreate(
             **request.dict(),
-            api_key=SECRETS.OPENAI_TOKEN.get_secret_value(),
+            api_key=self.SECRETS.OPENAI_TOKEN.get_secret_value(),
         )
 
     @classmethod
