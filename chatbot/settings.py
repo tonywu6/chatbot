@@ -38,28 +38,52 @@ class _AllowedMentions(AllowedMentions):
 
 
 class BotOptions(BaseModel):
-    intents: _Intents = DEFAULT_INTENTS
-    allowed_mentions: _AllowedMentions = DEFAULT_MENTIONS
+    """Options for the Discord bot."""
 
-    command_prefix: list[str] | Callable = "\x00"
+    intents: _Intents = DEFAULT_INTENTS
+    """The bot's default :external:class:`intents <discord.Intents>`."""
+
+    allowed_mentions: _AllowedMentions = DEFAULT_MENTIONS
+    """The bot's default :external:class:`allowed mentions <discord.AllowedMentions>`."""
+
+    command_prefix: list[str] | Callable = ["\x00"]
     case_insensitive: bool = True
     strip_after_prefix: bool = True
     help_command: str = None
 
 
 class BotSettings(BaseSettings):
+    """Provide the following settings in ``instance/discord.toml``."""
+
     Config = use_settings_file("instance/discord.toml")
 
     bot_options: BotOptions = BotOptions()
+    """Options for the Discord bot."""
 
     error_report_channel: int | None = None
+    """The ID of the channel to send uncaught errors to.
+
+    Errors caught during user actions, such as during a command, are sent as
+    error messages to the channel the user is in. If an error occurs outside of
+    a user action, such that there is no channel to send the error to, or if
+    another exception occurred while reporting it, it is sent to this channel
+    instead.
+    """
 
 
 class AppSecrets(BaseSettings):
+    """Provide the following settings in ``instance/secrets.toml`` or through\
+        environment variables."""
+
     Config = use_settings_file("instance/secrets.toml")
 
     DISCORD_BOT_TOKEN: SecretStr
+    """The bot token for the Discord bot. Visit
+    `Discord Developer Portal <https://discord.com/developers/applications>`_,
+    create an application, and then create your bot."""
+
     OPENAI_TOKEN: SecretStr
+    """Your OpenAI API token."""
 
     def get_bot_token(self):
         return self.DISCORD_BOT_TOKEN.get_secret_value()

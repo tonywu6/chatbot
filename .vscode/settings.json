@@ -1,10 +1,4 @@
 {
-  "cSpell.words": [
-    "blurple",
-    "emojize",
-    "gifv",
-    "mdformat",
-    "psutil",
-    "tiktoken"
-  ]
+  "cSpell.words": ["blurple", "emojize", "gifv", "mdformat", "psutil", "tiktoken"],
+  "esbonio.sphinx.confDir": ""
 }
