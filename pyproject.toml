@@ -2,7 +2,7 @@
 authors = ["Tony Wu <tonywu6@protonmail.com>"]
 description = ""
 license = "AGPL-3.0-or-later"
-name = "dougbot3"
+name = "chatbot"
 readme = "README.md"
 version = "0.1.0"
 

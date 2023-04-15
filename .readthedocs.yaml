@@ -18,3 +18,9 @@ build:
 
 sphinx:
   configuration: docs/source/conf.py
+
+python:
+  install:
+    # This sets up autodoc
+    - method: pip
+      path: .
