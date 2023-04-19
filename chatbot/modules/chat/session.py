@@ -395,6 +395,14 @@ class ChatSession:
         return results
 
     def should_answer(self, message: Message):
+        # ignore all messages that start with a mention of another user
+        # (like how tweets starting with @ are not shown to followers)
+        for user in message.mentions:
+            if user.mention != self.assistant:
+                continue
+            if message.content.startswith(user.mention):
+                return False
+
         result = not message.author.mention == self.assistant
         if self.options.features.timing == "when mentioned":
             result = result and self.assistant in [m.mention for m in message.mentions]

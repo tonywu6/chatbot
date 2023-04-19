@@ -20,6 +20,12 @@ python cli.py run
 
 The bot listens to other users' messages, including those from other bots and Discord.
 
+Threads created by the bot are private. To invite other users, simply mention them in
+the thread.
+
+The bot will never respond to messages that begin by mentioning another user (like how
+tweets that begin with @ were considered conversations between two users).
+
 In the request, messages from other users will look like:
 
 ```json
