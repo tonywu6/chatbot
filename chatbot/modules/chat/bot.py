@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from string import Template
 from textwrap import shorten
-from typing import Optional
+from typing import Literal, Optional
 
 import arrow
 import orjson
@@ -163,13 +163,15 @@ class ChatCommands(Cog):
         preset="Include predefined initial messages.",
         model="The GPT model to use.",
         system_message="Provide a custom system message.",
-        timing="Control when the bot will respond.",
+        timing="Limit the frequency of the bot responding to messages.",
         reply_to="Control to whose messages the bot will respond.",
+        thread_access="Limit who can access the thread.",
     )
     @guild_only()
     @text_channel_only
     @bot_has_permissions(
         view_channel=True,
+        create_public_threads=True,
         create_private_threads=True,
         send_messages_in_threads=True,
         manage_threads=True,
@@ -185,6 +187,7 @@ class ChatCommands(Cog):
         model: ChatModel = "gpt-3.5-turbo-0301",
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        thread_access: Literal["private", "public"] = "private",
     ):
         if not isinstance(interaction.channel, TextChannel):
             raise UserInputError("This command can only be used in a text channel.")
@@ -192,7 +195,9 @@ class ChatCommands(Cog):
         thread_name = " ".join(self._fake.words(part_of_speech="noun"))
         thread = await interaction.channel.create_thread(
             name=thread_name,
-            type=ChannelType.private_thread,
+            type=ChannelType.private_thread
+            if thread_access == "private"
+            else ChannelType.public_thread,
         )
 
         logger.info("Chat {0}: started", thread.mention)
