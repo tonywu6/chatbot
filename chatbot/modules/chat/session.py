@@ -398,7 +398,7 @@ class ChatSession:
         # ignore all messages that start with a mention of another user
         # (like how tweets starting with @ are not shown to followers)
         for user in message.mentions:
-            if user.mention != self.assistant:
+            if user.mention == self.assistant:
                 continue
             if message.content.startswith(user.mention):
                 return False
