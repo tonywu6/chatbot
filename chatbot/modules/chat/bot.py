@@ -361,7 +361,11 @@ class ChatCommands(Cog):
             return
 
         send_notice = not message.author.bot
-        session = await self.controller.ensure_session(thread, verbose=send_notice)
+
+        try:
+            session = await self.controller.ensure_session(thread, verbose=send_notice)
+        except Exception:
+            return
 
         async with session.editing, self.maybe_update_thread_name(session, thread):
             await session.read_chat(message)
@@ -398,7 +402,11 @@ class ChatCommands(Cog):
             await interaction.delete_original_response()
             return
 
-        session = await self.controller.ensure_session(channel)
+        try:
+            session = await self.controller.ensure_session(channel)
+        except Exception:
+            return
+
         ensure_chat_owner(interaction, session)
 
         await interaction.delete_original_response()
