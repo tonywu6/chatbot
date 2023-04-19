@@ -86,7 +86,7 @@ class ManageChatView(DefaultView):
 
         title = await session.write_title()
         if title:
-            await channel.edit(name=title)
+            await channel.edit(name=shorten(title, 100, placeholder="..."))
 
         await interaction.delete_original_response()
 
