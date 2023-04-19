@@ -395,6 +395,10 @@ class ChatSession:
         return results
 
     def should_answer(self, message: Message):
+        # disregard all Discord notifications
+        if message.is_system():
+            return
+
         # ignore all messages that start with a mention of another user
         # (like how tweets starting with @ are not shown to followers)
         for user in message.mentions:
