@@ -17,7 +17,7 @@ from discord import (
     TextChannel,
     Thread,
 )
-from discord.app_commands import command, describe, guild_only
+from discord.app_commands import command, context_menu, describe, guild_only
 from discord.app_commands.checks import bot_has_permissions
 from discord.ext.commands import Bot, Cog, UserInputError
 from discord.ui import Button, button
@@ -45,7 +45,7 @@ from chatbot.utils.discord.color import Color2
 from chatbot.utils.discord.file import discord_open
 from chatbot.utils.discord.transform import KeyOf
 from chatbot.utils.discord.ui import DefaultView
-from chatbot.utils.errors import system_message
+from chatbot.utils.errors import is_system_message, system_message
 
 
 class ManageChatView(DefaultView):
@@ -390,6 +390,22 @@ class ChatCommands(Cog):
                 # don't respond to regular message edits
                 await session.process_request(after)
 
+    async def delete_message(self, interaction: Interaction, message: Message):
+        await interaction.response.defer(ephemeral=True)
+
+        channel = interaction.channel
+        if not isinstance(channel, Thread) or is_system_message(message):
+            await interaction.delete_original_response()
+            return
+
+        session = await self.controller.ensure_session(channel)
+        ensure_chat_owner(interaction, session)
+
+        await interaction.delete_original_response()
+        await message.delete()
+
 
 async def setup(bot: Bot) -> None:
-    await bot.add_cog(ChatCommands(bot))
+    cog = ChatCommands(bot)
+    bot.tree.add_command(context_menu(name="Chat: Delete")(cog.delete_message))
+    await bot.add_cog(cog)
