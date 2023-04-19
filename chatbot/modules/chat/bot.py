@@ -341,10 +341,13 @@ class ChatCommands(Cog):
     @classmethod
     @asynccontextmanager
     async def maybe_update_thread_name(cls, session: ChatSession, channel: Thread):
-        if (
-            any(m.role == "assistant" for m in session.all_messages)
-            and session.token_count_upper_bound > 128
-        ):
+        def responded() -> bool:
+            return any(m.role == "assistant" for m in session.all_messages)
+
+        def sufficiently_long() -> bool:
+            return session.token_count_upper_bound > 128
+
+        if responded() and sufficiently_long():
             try:
                 yield
             finally:
@@ -356,7 +359,7 @@ class ChatCommands(Cog):
         except Exception:
             pass
         else:
-            if session.token_count_upper_bound < 128:
+            if not responded() or not sufficiently_long():
                 return
             title = await session.write_title()
             if title:
