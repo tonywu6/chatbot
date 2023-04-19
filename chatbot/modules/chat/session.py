@@ -456,7 +456,7 @@ class ChatSession:
         ad_hoc = ChatSession(
             assistant="assistant",
             options=ChatSessionOptions(
-                request=ChatCompletionRequest(max_tokens=256, temperature=0),
+                request=ChatCompletionRequest(max_tokens=64, temperature=0.5),
             ),
         )
         prompt = (

@@ -341,7 +341,10 @@ class ChatCommands(Cog):
     @classmethod
     @asynccontextmanager
     async def maybe_update_thread_name(cls, session: ChatSession, channel: Thread):
-        if session.token_count_upper_bound > 128:
+        if (
+            any(m.role == "assistant" for m in session.all_messages)
+            and session.token_count_upper_bound > 128
+        ):
             try:
                 yield
             finally:
