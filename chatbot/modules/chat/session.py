@@ -463,8 +463,7 @@ class ChatSession:
             "Role: Copy editor"
             "\nTask: Write an eye-catching title that best captures the following conversation."
             "\nRequirements: Should be in the conversation's original language;"
-            " Must be a single sentence or phrase;"
-            " Must NOT contain quotation marks."
+            " Must be a single sentence or phrase"
             "\nConversation:"
         )
         messages = "\n".join(
