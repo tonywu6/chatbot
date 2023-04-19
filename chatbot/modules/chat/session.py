@@ -461,7 +461,7 @@ class ChatSession:
         )
         prompt = (
             "Role: Copy editor"
-            "\nTask: Write a CONCISE headline that best captures the following conversation."
+            "\nTask: Write an eye-catching title that best captures the following conversation."
             "\nRequirements: Should be in the conversation's original language;"
             " Must be a single sentence or phrase;"
             " Must NOT contain quotation marks."
