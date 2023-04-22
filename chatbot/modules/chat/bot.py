@@ -330,14 +330,6 @@ class ChatCommands(Cog):
             for message in message_ids:
                 await session.splice_messages(message)
 
-    @Cog.listener("on_raw_message_delete")
-    async def on_raw_message_delete(self, payload: RawMessageDeleteEvent):
-        await self._delete_messages(payload.channel_id, payload.message_id)
-
-    @Cog.listener("on_raw_bulk_message_delete")
-    async def on_raw_bulk_message_delete(self, payload: RawBulkMessageDeleteEvent):
-        await self._delete_messages(payload.channel_id, *payload.message_ids)
-
     @classmethod
     @asynccontextmanager
     async def maybe_update_thread_name(cls, session: ChatSession, channel: Thread):
@@ -422,6 +414,14 @@ class ChatCommands(Cog):
 
         await interaction.delete_original_response()
         await message.delete()
+
+    @Cog.listener("on_raw_message_delete")
+    async def on_raw_message_delete(self, payload: RawMessageDeleteEvent):
+        await self._delete_messages(payload.channel_id, payload.message_id)
+
+    @Cog.listener("on_raw_bulk_message_delete")
+    async def on_raw_bulk_message_delete(self, payload: RawBulkMessageDeleteEvent):
+        await self._delete_messages(payload.channel_id, *payload.message_ids)
 
 
 async def setup(bot: Bot) -> None:

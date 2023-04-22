@@ -6,14 +6,16 @@ from loguru import logger
 
 from chatbot.bot import create_bot
 from chatbot.settings import AppSecrets
-from chatbot.utils.config import load_settings
+from chatbot.utils.config import load_settings, set_profile
 from chatbot.utils.logging import configure_logging
 
 
 @click.group()
+@click.option("-p", "--profile", default=None)
 @click.option("--debug", is_flag=True, default=False)
 @click.option("--log-file", type=click.File("a+"), default=None)
-def cli(debug: bool = False, log_file: str | None = None):
+def cli(profile: str | None = None, debug: bool = False, log_file: str | None = None):
+    set_profile(profile)
     configure_logging(log_file, level="DEBUG" if debug else "INFO")
 
 
@@ -43,7 +45,7 @@ def run(autoreload: bool = False):
     async def main():
         bot = await create_bot()
         async with bot:
-            await bot.start(SECRETS.get_bot_token())
+            await bot.start(load_settings(AppSecrets).get_bot_token())
 
     with suppress(KeyboardInterrupt):
         asyncio.run(main())
@@ -54,12 +56,11 @@ def sync_commands():
     async def main():
         bot = await create_bot()
         async with bot:
-            await bot.login(SECRETS.get_bot_token())
+            await bot.login(load_settings(AppSecrets).get_bot_token())
             await bot.tree.sync()
 
     asyncio.run(main())
 
 
 if __name__ == "__main__":
-    SECRETS = load_settings(AppSecrets)
     cli()

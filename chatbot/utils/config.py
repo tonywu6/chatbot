@@ -11,6 +11,19 @@ from loguru import logger
 from pydantic import BaseSettings, Extra, SecretStr, ValidationError
 from pydantic.env_settings import SettingsSourceCallable
 
+profile: str | None = None
+
+
+def set_profile(name: str | None):
+    global profile
+    profile = name
+
+
+def path_with_profile(path: Path) -> Path:
+    if profile is None:
+        return path
+    return path.with_name(f"{path.stem}@{profile}{path.suffix}")
+
 
 def toml_config_loader(path: Path) -> Callable[[BaseSettings], dict]:
     @cache
@@ -18,10 +31,11 @@ def toml_config_loader(path: Path) -> Callable[[BaseSettings], dict]:
         return toml.loads(path.read_text())
 
     def loader(settings: BaseSettings) -> dict:
-        if not path.exists():
-            logger.warning(f"Config file {path} does not exist")
+        actual_path = path_with_profile(path)
+        if not actual_path.exists():
+            logger.warning(f"Config file {actual_path} does not exist")
             return {}
-        return cached_read(path)
+        return cached_read(actual_path)
 
     return loader
 
@@ -32,15 +46,16 @@ def yaml_config_loader(path: Path) -> Callable[[BaseSettings], dict]:
         return yaml.safe_load(path.read_text()) or {}
 
     def loader(settings: BaseSettings) -> dict:
-        if not path.exists():
-            logger.warning(f"Config file {path} does not exist")
+        actual_path = path_with_profile(path)
+        if not actual_path.exists():
+            logger.warning(f"Config file {actual_path} does not exist")
             return {}
-        return cached_read(path)
+        return cached_read(actual_path)
 
     return loader
 
 
-class _AugmentedConfig:
+class _AugmentedConfig(BaseSettings.Config):
     config_path = Path
 
     @classmethod
@@ -52,10 +67,7 @@ class _AugmentedConfig:
         ...
 
 
-_SettingsConfig = _AugmentedConfig | BaseSettings.Config
-
-
-def use_settings_file(path: str | Path, **extra_config) -> _SettingsConfig:
+def use_settings_file(path: str | Path, **extra_config) -> type[_AugmentedConfig]:
     path = Path(path)
     if path.suffix == ".toml":
         loader = toml_config_loader(path)
@@ -106,10 +118,11 @@ def load_settings(settings_cls: type[T]) -> T:
     except ValidationError as e:
         filename = inspect.getsourcefile(settings_cls)
         lines, line_no = inspect.getsourcelines(settings_cls)
+        expected_path = path_with_profile(settings_cls.Config.config_path)
         logger.error(
             f"\nError loading settings: {settings_cls.__name__}"
             "\n------------"
-            f"\nExpected location: {settings_cls.Config.config_path}"
+            f"\nExpected location: {expected_path}"
             " (or provide via environment variables)"
             f"\nSettings defined at {filename}:{line_no}"
             "\n------------"
