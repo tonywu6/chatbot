@@ -2,10 +2,11 @@ import asyncio
 import re
 import warnings
 from textwrap import shorten
+from typing import Optional
 
 import openai
 import yaml
-from discord import Attachment, Embed, Message, MessageType, Thread
+from discord import Attachment, Embed, Interaction, Message, MessageType, Thread
 from discord.abc import Messageable
 from loguru import logger
 from markdown_it import MarkdownIt
@@ -27,6 +28,7 @@ from chatbot.utils.discord.color import Color2
 from chatbot.utils.discord.embed import Embed2
 from chatbot.utils.discord.file import discord_open
 from chatbot.utils.discord.markdown import divide_text
+from chatbot.utils.discord.messageable import send_message
 from chatbot.utils.discord.typing import OutgoingMessage
 from chatbot.utils.errors import (
     is_system_message,
@@ -417,7 +419,11 @@ class ChatSession:
             result = result and not message.author.bot
         return result
 
-    async def answer(self, channel: Messageable) -> bool:
+    async def answer(
+        self,
+        channel: Messageable,
+        interaction: Optional[Interaction] = None,
+    ) -> bool:
         async with channel.typing(), report_warnings(channel):
             logger.info("Sending API request")
 
@@ -430,8 +436,9 @@ class ChatSession:
             replies = self.prepare_replies(response)
             logger.info("Resolved {0} replies", len(replies))
 
+            answerable = interaction or channel
             for reply in replies:
-                await channel.send(**reply)
+                await send_message(answerable, reply)
 
             self.warn_about_token_limit()
             return True

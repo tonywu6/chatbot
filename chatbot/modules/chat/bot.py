@@ -319,10 +319,8 @@ class ChatCommands(Cog):
                 ),
             ),
         )
-        user = interaction.user.mention
         await interaction.response.defer()
-        await session.answer(interaction.channel)
-        await interaction.edit_original_response(content=f"{user} asked: {text}")
+        await session.answer(interaction.channel, interaction)
 
     async def _delete_messages(self, channel_id: int, *message_ids: int):
         thread = self.bot.get_channel(channel_id)
