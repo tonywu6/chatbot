@@ -1,4 +1,6 @@
 import asyncio
+import shlex
+import sys
 from contextlib import suppress
 
 import click
@@ -33,9 +35,12 @@ def run(autoreload: bool = False):
         def on_change(*args, **kwargs):
             logger.warning("File changes detected. Restarting...")
 
+        args = sys.argv[:]
+        args.remove("--autoreload")
+
         watchfiles.run_process(
             ".",
-            target=f"python {__file__} run",
+            target=shlex.join([sys.executable, *args]),
             callback=on_change,
             watch_filter=watch_filter,
         )
