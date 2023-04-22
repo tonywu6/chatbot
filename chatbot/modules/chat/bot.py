@@ -239,6 +239,7 @@ class ChatCommands(Cog):
     @thread_only
     async def regenerate(self, interaction: Interaction):
         session = await self.controller.ensure_session(interaction.channel)
+        channel: Thread = interaction.channel
 
         to_delete: list[int] = []
 
@@ -249,14 +250,14 @@ class ChatCommands(Cog):
                 break
             to_delete.append(message.message_id)
 
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
-        for message_id in to_delete:
-            await session.splice_messages(message_id)
-        await interaction.channel.delete_messages([Snowflake(id=x) for x in to_delete])
-
-        async with session.editing:
-            await session.answer(interaction.channel)
+        async with channel.typing(), session.editing:
+            await channel.delete_messages([Snowflake(id=x) for x in to_delete])
+            for message_id in to_delete:
+                await session.splice_messages(message_id)
+            await interaction.delete_original_response()
+            await session.answer(channel)
 
     @command(name="ask", description="Generate a one-shot response.")
     @describe(
