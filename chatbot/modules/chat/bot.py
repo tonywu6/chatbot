@@ -211,10 +211,8 @@ class ChatCommands(Cog):
         )
         session = ChatSession(assistant=self.bot.user.mention, options=atom)
 
-        await thread.send(
-            **session.to_atom(),
-            view=ManageChatView(self.bot, self.controller),
-        )
+        controls = ManageChatView(self.bot, self.controller)
+        await thread.send(**session.to_atom(), view=controls)
         await thread.add_user(interaction.user)
 
     @command(name="stats", description="Get stats about the current chat.")
@@ -258,6 +256,19 @@ class ChatCommands(Cog):
                 await session.splice_messages(message_id)
             await interaction.delete_original_response()
             await session.answer(channel)
+
+    @command(
+        name="comment",
+        description="Add a comment to the chat. Comments are ignored entirely.",
+    )
+    @guild_only()
+    @thread_only
+    async def comment(self, interaction: Interaction, *, content: str):
+        await interaction.response.send_message(
+            embed=system_message()
+            .set_description(content)
+            .personalized(interaction.user)
+        )
 
     @command(name="ask", description="Generate a one-shot response.")
     @describe(

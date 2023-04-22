@@ -234,9 +234,11 @@ class ChatSession:
         message: Message,
     ) -> list[ChatMessage]:
         if is_system_message(message):
+            # Message is from us, ignore it
             return []
 
         if message.is_system():
+            # Message is from Discord
             content = message.system_content
             for member in [message.author, *message.mentions]:
                 content = content.replace(member.name, member.mention)
@@ -253,9 +255,13 @@ class ChatSession:
 
         role = "assistant" if author.mention == assistant else "user"
 
-        if message.type == MessageType.chat_input_command and message.interaction:
+        if (
+            message.type
+            in (MessageType.chat_input_command, MessageType.context_menu_command)
+            and message.interaction
+        ):
             invoker = message.interaction.user.mention
-            action = f"/{message.interaction.name} command from {author.mention}"
+            action = f"{message.interaction.name} command from {author.mention}"
             messages.append(ChatMessage(role=role, content=f"{invoker} used {action}"))
 
         if message.content:

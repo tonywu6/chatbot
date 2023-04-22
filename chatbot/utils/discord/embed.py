@@ -149,7 +149,7 @@ class _Addressable(Protocol):
 
 
 @attr.s(slots=True, eq=True, frozen=True)
-class Embed2:
+class Embed2(Embed):
     """attr.s dataclass. Replaces :class:`discord.Embed`.
 
     **Drop-in replacement for** :class:`discord.Embed` **when passed to**
