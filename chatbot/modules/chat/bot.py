@@ -239,14 +239,14 @@ class ChatCommands(Cog):
         session = await self.controller.ensure_session(interaction.channel)
         channel: Thread = interaction.channel
 
-        to_delete: list[int] = []
+        to_delete: set[int] = set()
 
         for message in reversed(session.messages):
             if message.role == "system":
                 continue
             if message.role != "assistant":
                 break
-            to_delete.append(message.message_id)
+            to_delete.add(message.message_id)
 
         await interaction.response.defer(ephemeral=True)
 
