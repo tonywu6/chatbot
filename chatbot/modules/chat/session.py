@@ -1,4 +1,5 @@
 import asyncio
+import re
 import warnings
 from textwrap import shorten
 
@@ -13,7 +14,7 @@ from more_itertools import constrained_batches, first, locate, split_at
 
 from chatbot.modules.chat.helpers import num_tokens_from_messages
 from chatbot.modules.chat.models import (
-    CHAT_MODEL_TOKEN_LIMITS,
+    CHAT_MODELS,
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatMessage,
@@ -444,7 +445,7 @@ class ChatSession:
         return await self.answer(message.channel)
 
     def warn_about_token_limit(self):
-        limit = CHAT_MODEL_TOKEN_LIMITS[self.options.request.model]
+        limit = CHAT_MODELS[self.options.request.model]["token_limit"]
         percentage = self.token_count_upper_bound / limit
         if percentage > 0.75:
             warnings.warn(
@@ -456,7 +457,11 @@ class ChatSession:
         ad_hoc = ChatSession(
             assistant="assistant",
             options=ChatSessionOptions(
-                request=ChatCompletionRequest(max_tokens=64, temperature=0.5),
+                request=ChatCompletionRequest(
+                    model="gpt-3.5-turbo",
+                    max_tokens=64,
+                    temperature=0.5,
+                ),
             ),
         )
         prompt = (
@@ -479,6 +484,8 @@ class ChatSession:
             await report_error(e)
             return
         answer = first(ad_hoc.prepare_replies(response), None)
-        if answer:
-            return answer.get("content") or None
+        if answer and (title := answer.get("content")) and title:
+            if unquoted := re.match(r"([\"']?)(.*)\1", title):
+                return unquoted[2]
+            return title
         return None

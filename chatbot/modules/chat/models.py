@@ -3,11 +3,12 @@ from typing import Literal, Optional, TypedDict
 
 from pydantic import BaseModel, Field
 
-ChatModel = Literal["gpt-3.5-turbo", "gpt-3.5-turbo-0301"]
+ChatModel = Literal["gpt-3.5-turbo"]
 
-CHAT_MODEL_TOKEN_LIMITS: dict[ChatModel, int] = {
-    "gpt-3.5-turbo": 4096,
-    "gpt-3.5-turbo-0301": 4096,
+ChatModelInfo = TypedDict("ModelInfo", {"token_limit": int})
+
+CHAT_MODELS: dict[ChatModel, ChatModelInfo] = {
+    "gpt-3.5-turbo": {"token_limit": 4096},
 }
 
 
@@ -56,7 +57,7 @@ class ChatMessage(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     user: str = "user"
-    model: ChatModel = "gpt-3.5-turbo-0301"
+    model: ChatModel = "gpt-3.5-turbo"
     max_tokens: Optional[int] = None
     temperature: float = 0.7
     top_p: float = 1
@@ -73,7 +74,7 @@ class ChatCompletionRequest(BaseModel):
         """
         if self.max_tokens is None:
             return
-        quota = CHAT_MODEL_TOKEN_LIMITS[self.model] - usage
+        quota = CHAT_MODELS[self.model]["token_limit"] - usage
         if quota <= 0:
             raise ValueError("usage exceeds token limit")
         if self.max_tokens > quota:

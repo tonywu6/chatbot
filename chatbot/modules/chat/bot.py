@@ -129,7 +129,10 @@ class ChatCommands(Cog):
 
     CHAT_PRESETS: dict[str, list[ChatMessage]] = {
         "Discord bot": [
-            ChatMessage(role="system", content="Your name is ${assistant}. ${discord}.")
+            ChatMessage(
+                role="system",
+                content="You are a helpful Discord bot. Your name is ${assistant}. ${discord}.",
+            )
         ],
         "Insightful assistant": [
             ChatMessage(
@@ -180,11 +183,11 @@ class ChatCommands(Cog):
         self,
         interaction: Interaction,
         *,
-        preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),
+        model: ChatModel = "gpt-3.5-turbo",
+        preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),  # type: ignore (doesn't work like TypeScript lol)
         system_message: Optional[str] = None,
         timing: Timing = "immediately",
         reply_to: ReplyTo = "initial user",
-        model: ChatModel = "gpt-3.5-turbo-0301",
         temperature: float = 0.7,
         max_tokens: int | None = None,
         thread_access: Literal["private", "public"] = "private",
@@ -300,7 +303,7 @@ class ChatCommands(Cog):
         interaction: Interaction,
         *,
         text: str,
-        model: ChatModel = "gpt-3.5-turbo-0301",
+        model: ChatModel = "gpt-3.5-turbo",
         temperature: float = 0.7,
         max_tokens: int | None = None,
     ):
