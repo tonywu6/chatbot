@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Literal, Optional, TypedDict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, root_validator
 
 ChatModel = Literal["gpt-3.5-turbo"]
 
@@ -89,8 +89,23 @@ ReplyTo = Literal["anyone", "any human", "initial user"]
 
 
 class ChatFeatures(BaseModel):
-    timing: Timing = "immediately"
-    reply_to: ReplyTo = "initial user"
+    response_timing: Timing = "immediately"
+    respond_to_bots: bool = False
+
+    timing: Optional[Timing] = Field(default=None, exclude=True)
+    """.. deprecated:: 0.1.1"""
+    reply_to: Optional[ReplyTo] = Field(default=None, exclude=True)
+    """.. deprecated:: 0.1.1"""
+
+    @root_validator(pre=True)
+    @classmethod
+    def _deprecated_fields(cls, values: dict):
+        values = {**values}
+        if values.get("timing") is not None:
+            values["response_timing"] = values["timing"]
+        if values.get("reply_to") is not None:
+            values["respond_to_bots"] = values["reply_to"] == "anyone"
+        return values
 
 
 class ChatSessionOptions(BaseModel):

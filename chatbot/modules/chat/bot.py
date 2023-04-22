@@ -33,7 +33,6 @@ from chatbot.modules.chat.models import (
     ChatMessage,
     ChatModel,
     ChatSessionOptions,
-    ReplyTo,
     Timing,
 )
 from chatbot.modules.chat.session import ChatSession
@@ -152,9 +151,7 @@ class ChatCommands(Cog):
         model="The GPT model to use.",
         preset="Use predefined initial messages.",
         system_message="Provide a custom system message.",
-        timing="Limit the frequency of the bot responding to messages.",
-        reply_to="Control to whose messages the bot will respond.",
-        thread_access="Limit who can access the thread.",
+        access="Choose whether to create a public or private thread.",
     )
     @guild_only()
     @text_channel_only
@@ -172,11 +169,11 @@ class ChatCommands(Cog):
         model: ChatModel = "gpt-3.5-turbo",
         preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),  # type: ignore (doesn't work like TypeScript lol)
         system_message: Optional[str] = None,
-        timing: Timing = "immediately",
-        reply_to: ReplyTo = "initial user",
+        access: Literal["private thread", "public thread"] = "private thread",
+        response_timing: Timing = "immediately",
+        respond_to_bots: bool = False,
         temperature: float = 0.7,
         max_tokens: int | None = None,
-        thread_access: Literal["private", "public"] = "private",
     ):
         if not isinstance(interaction.channel, TextChannel):
             raise UserInputError("This command can only be used in a text channel.")
@@ -185,7 +182,7 @@ class ChatCommands(Cog):
         thread = await interaction.channel.create_thread(
             name=thread_name,
             type=ChannelType.private_thread
-            if thread_access == "private"
+            if access == "private thread"
             else ChannelType.public_thread,
         )
 
@@ -207,7 +204,10 @@ class ChatCommands(Cog):
                 max_tokens=max_tokens,
                 messages=self.get_preset(system_message or preset, interaction),
             ),
-            features=ChatFeatures(timing=timing, reply_to=reply_to),
+            features=ChatFeatures(
+                response_timing=response_timing,
+                respond_to_bots=respond_to_bots,
+            ),
         )
         session = ChatSession(assistant=self.bot.user.mention, options=atom)
 

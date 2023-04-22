@@ -416,12 +416,12 @@ class ChatSession:
             if message.content.startswith(user.mention):
                 return False
 
+        features = self.options.features
+        # never respond to self
         result = not message.author.mention == self.assistant
-        if self.options.features.timing == "when mentioned":
+        if features.response_timing == "when mentioned":
             result = result and self.assistant in [m.mention for m in message.mentions]
-        if self.options.features.reply_to == "initial user":
-            result = result and message.author.mention == self.options.request.user
-        elif self.options.features.reply_to == "any human":
+        if not features.respond_to_bots:
             result = result and not message.author.bot
         return result
 

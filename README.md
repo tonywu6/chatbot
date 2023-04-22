@@ -65,11 +65,11 @@ The most prominent strain of A.I. encodes a flawed conception of language and kn
 
 ### Response timing
 
-Use the `timing` option to control when the bot will respond: after every message or
-only when the bot is mentioned.
+Use the `response_timing` option to control when the bot will respond: after every
+message or only when the bot is mentioned.
 
-Use the `reply_to` option to control to whom the bot will respond: any user (including
-bots and Discord), any human user, or the user who started the bot.
+Use the `respond_to_bots` option to control whether the bot will respond also after new
+messages from other bots.
 
 ### Presets
 
