@@ -424,7 +424,7 @@ class ChatSession:
         channel: Messageable,
         interaction: Optional[Interaction] = None,
     ) -> bool:
-        async with channel.typing(), report_warnings(channel):
+        async with report_warnings(channel):
             logger.info("Sending API request")
 
             try:
@@ -449,7 +449,8 @@ class ChatSession:
         if not new_message or not self.should_answer(message):
             return False
 
-        return await self.answer(message.channel)
+        async with message.channel.typing():
+            return await self.answer(message.channel)
 
     def warn_about_token_limit(self):
         limit = CHAT_MODELS[self.options.request.model]["token_limit"]

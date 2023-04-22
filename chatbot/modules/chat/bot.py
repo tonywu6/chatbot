@@ -128,26 +128,12 @@ class ChatCommands(Cog):
     CHAT_OPTIONS = load_settings(ChatOptions)
 
     CHAT_PRESETS: dict[str, list[ChatMessage]] = {
-        "Discord bot": [
-            ChatMessage(
-                role="system",
-                content="You are a helpful Discord bot. Your name is ${assistant}. ${discord}.",
-            )
-        ],
-        "Insightful assistant": [
-            ChatMessage(
-                role="system",
-                content="You are an insightful assistant."
-                " You like to provide detailed responses to questions."
-                " Your name is ${assistant}. ${discord}.",
-            )
-        ],
         "ChatGPT": [
             ChatMessage(
                 role="system",
                 content="You are ChatGPT, a large language model trained by OpenAI."
-                " Answer as detailed as possible."
-                " You are answering questions from ${user} over Discord.",
+                " Answer as detailed and insightful as possible."
+                " You are taking questions from ${user} over Discord.",
             )
         ],
         "Empty": [],
@@ -163,8 +149,8 @@ class ChatCommands(Cog):
 
     @command(name="chat", description="Start a chat thread with the bot.")
     @describe(
-        preset="Include predefined initial messages.",
         model="The GPT model to use.",
+        preset="Use predefined initial messages.",
         system_message="Provide a custom system message.",
         timing="Limit the frequency of the bot responding to messages.",
         reply_to="Control to whose messages the bot will respond.",
@@ -213,38 +199,13 @@ class ChatCommands(Cog):
         )
         await interaction.response.send_message(embed=response, ephemeral=True)
 
-        env = {
-            "assistant": self.bot.user.mention,
-            "user": interaction.user.mention,
-            "server": interaction.guild.name,
-            "channel": thread.mention,
-            "current_date": arrow.now().format("YYYY-MM-DD"),
-        }
-        env["discord"] = (
-            "You are talking to {user} over Discord."
-            " Server name: {server}."
-            " Channel: {channel}"
-        ).format(**env)
-
-        preset_dialog = []
-        if system_message:
-            tmpl = Template(system_message)
-            preset_dialog = [
-                ChatMessage(role="system", content=tmpl.safe_substitute(env))
-            ]
-        else:
-            preset_dialog = [
-                m.copy(update={"content": Template(m.content).safe_substitute(env)})
-                for m in self.CHAT_PRESETS.get(preset, [])
-            ]
-
         atom = ChatSessionOptions(
             request=ChatCompletionRequest(
                 model=model,
                 user=interaction.user.mention,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                messages=preset_dialog,
+                messages=self.get_preset(system_message or preset, interaction),
             ),
             features=ChatFeatures(timing=timing, reply_to=reply_to),
         )
@@ -270,7 +231,10 @@ class ChatCommands(Cog):
             ephemeral=True,
         )
 
-    @command(name="regenerate", description="Regenerate response.")
+    @command(
+        name="regenerate",
+        description="Regenerate the bot's last response in a thread.",
+    )
     @guild_only()
     @thread_only
     async def regenerate(self, interaction: Interaction):
@@ -285,25 +249,27 @@ class ChatCommands(Cog):
                 break
             to_delete.append(message.message_id)
 
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
 
-        await session.splice_messages(to_delete)
+        for message_id in to_delete:
+            await session.splice_messages(message_id)
         await interaction.channel.delete_messages([Snowflake(id=x) for x in to_delete])
 
         async with session.editing:
-            pass
-
-        await interaction.delete_original_response()
-        await session.answer(interaction.channel)
+            await session.answer(interaction.channel)
 
     @command(name="ask", description="Generate a one-shot response.")
-    @describe(model="The GPT model to use.")
+    @describe(
+        model="The GPT model to use.",
+        preset="Use predefined initial messages.",
+    )
     async def ask(
         self,
         interaction: Interaction,
         *,
         text: str,
         model: ChatModel = "gpt-3.5-turbo",
+        preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),  # type: ignore
         temperature: float = 0.7,
         max_tokens: int | None = None,
     ):
@@ -315,21 +281,43 @@ class ChatCommands(Cog):
                     model=model,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    messages=[ChatMessage(role="user", content=text)],
+                    messages=[
+                        *self.get_preset(preset, interaction),
+                        ChatMessage(role="user", content=text),
+                    ],
                 ),
             ),
         )
         await interaction.response.defer()
         await session.answer(interaction.channel, interaction)
 
-    async def _delete_messages(self, channel_id: int, *message_ids: int):
-        thread = self.bot.get_channel(channel_id)
-        session = self.controller.get_session(thread)
-        if not session:
-            return
-        async with session.editing:
-            for message in message_ids:
-                await session.splice_messages(message)
+    def get_preset(
+        self,
+        name_or_message: str,
+        interaction: Interaction,
+    ):
+        env = {
+            "current_date": arrow.now().format("YYYY-MM-DD"),
+            "assistant": self.bot.user.mention,
+            "user": interaction.user.mention,
+            "channel": interaction.channel.mention,
+            "server": interaction.guild.name,
+        }
+        env["discord"] = Template(
+            "You are talking to {user} over Discord."
+            " Server name: {server}."
+            " Channel: {channel}"
+        ).safe_substitute(env)
+
+        preset = self.CHAT_PRESETS.get(name_or_message)
+        if not preset:
+            tmpl = Template(name_or_message)
+            return [ChatMessage(role="system", content=tmpl.safe_substitute(env))]
+        else:
+            return [
+                m.copy(update={"content": Template(m.content).safe_substitute(env)})
+                for m in preset
+            ]
 
     @classmethod
     @asynccontextmanager
@@ -416,13 +404,22 @@ class ChatCommands(Cog):
         await interaction.delete_original_response()
         await message.delete()
 
+    async def _delete_history(self, channel_id: int, *message_ids: int):
+        thread = self.bot.get_channel(channel_id)
+        session = self.controller.get_session(thread)
+        if not session:
+            return
+        async with session.editing:
+            for message in message_ids:
+                await session.splice_messages(message)
+
     @Cog.listener("on_raw_message_delete")
     async def on_raw_message_delete(self, payload: RawMessageDeleteEvent):
-        await self._delete_messages(payload.channel_id, payload.message_id)
+        await self._delete_history(payload.channel_id, payload.message_id)
 
     @Cog.listener("on_raw_bulk_message_delete")
     async def on_raw_bulk_message_delete(self, payload: RawBulkMessageDeleteEvent):
-        await self._delete_messages(payload.channel_id, *payload.message_ids)
+        await self._delete_history(payload.channel_id, *payload.message_ids)
 
 
 async def setup(bot: Bot) -> None:
