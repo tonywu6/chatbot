@@ -264,20 +264,11 @@ class ChatCommands(Cog):
     @guild_only()
     @thread_only
     async def comment(self, interaction: Interaction, *, content: str):
-        if len(content) > 2000:
-            await interaction.response.send_message(
-                embed=system_message()
-                .set_title("Comment")
-                .set_description(content)
-                .personalized(interaction.user)
-            )
-        else:
-            await interaction.response.send_message(
-                content=content,
-                embed=system_message()
-                .set_title("Comment")
-                .personalized(interaction.user),
-            )
+        await interaction.response.send_message(
+            embed=system_message()
+            .set_description(content)
+            .personalized(interaction.user)
+        )
 
     @command(name="ask", description="Generate a one-shot response.")
     @describe(
