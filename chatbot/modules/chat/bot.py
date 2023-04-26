@@ -8,6 +8,7 @@ import orjson
 from discord import (
     ButtonStyle,
     ChannelType,
+    Guild,
     Interaction,
     Message,
     Object as Snowflake,
@@ -17,6 +18,7 @@ from discord import (
     TextChannel,
     Thread,
 )
+from discord.abc import GuildChannel
 from discord.app_commands import command, context_menu, describe, guild_only
 from discord.app_commands.checks import bot_has_permissions
 from discord.ext.commands import Bot, Cog, UserInputError
@@ -169,7 +171,7 @@ class ChatCommands(Cog):
         model: ChatModel = "gpt-3.5-turbo",
         preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),  # type: ignore (doesn't work like TypeScript lol)
         system_message: Optional[str] = None,
-        access: Literal["private thread", "public thread"] = "private thread",
+        access: Literal["private thread", "public thread"] = "public thread",
         response_timing: Timing = "immediately",
         respond_to_bots: bool = False,
         temperature: float = 0.7,
@@ -188,13 +190,14 @@ class ChatCommands(Cog):
 
         logger.info("Chat {0}: started", thread.mention)
 
-        response = (
-            Embed2()
-            .set_title("Session started!")
-            .set_description(thread.mention)
-            .personalized(interaction.user)
-        )
-        await interaction.response.send_message(embed=response, ephemeral=True)
+        if access == "private thread":
+            response = (
+                Embed2()
+                .set_title("Session started!")
+                .set_description(thread.mention)
+                .personalized(interaction.user)
+            )
+            await interaction.response.send_message(embed=response, ephemeral=True)
 
         atom = ChatSessionOptions(
             request=ChatCompletionRequest(
@@ -308,13 +311,19 @@ class ChatCommands(Cog):
         name_or_message: str,
         interaction: Interaction,
     ):
-        env = {
+        env: dict[str, str | None] = {
             "current_date": arrow.now().format("YYYY-MM-DD"),
             "assistant": self.bot.user.mention,
             "user": interaction.user.mention,
-            "channel": interaction.channel.mention,
-            "server": interaction.guild.name,
         }
+        if isinstance(interaction.channel, GuildChannel):
+            env["channel"] = interaction.channel.mention
+        else:
+            env["channel"] = None
+        if isinstance(interaction.guild, Guild):
+            env["server"] = interaction.guild.name
+        else:
+            env["server"] = None
         env["discord"] = Template(
             "You are talking to {user} over Discord."
             " Server name: {server}."
