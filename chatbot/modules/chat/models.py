@@ -37,6 +37,19 @@ class ChatCompletionResponse(TypedDict):
     usage: ChatCompletionUsage
 
 
+class ChatCompletionDelta(TypedDict):
+    index: int
+    delta: ChatCompletionChoiceMessage
+    finish_reason: Literal["stop", "length", None]
+
+
+class ChatCompletionChunk(TypedDict):
+    id: str
+    object: str
+    created: int
+    choices: list[ChatCompletionDelta]
+
+
 class ChatMessageType(Enum):
     PLAIN_TEXT = 0
     CODE_BLOCK = 1

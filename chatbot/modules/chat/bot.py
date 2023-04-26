@@ -18,7 +18,7 @@ from discord import (
     TextChannel,
     Thread,
 )
-from discord.abc import GuildChannel
+from discord.abc import GuildChannel, Messageable
 from discord.app_commands import command, context_menu, describe, guild_only
 from discord.app_commands.checks import bot_has_permissions
 from discord.ext.commands import Bot, Cog, UserInputError
@@ -44,6 +44,7 @@ from chatbot.utils.discord import Embed2
 from chatbot.utils.discord.checks import text_channel_only, thread_only
 from chatbot.utils.discord.color import Color2
 from chatbot.utils.discord.file import discord_open
+from chatbot.utils.discord.markdown import blockquote
 from chatbot.utils.discord.transform import KeyOf
 from chatbot.utils.discord.ui import DefaultView
 from chatbot.utils.errors import is_system_message, system_message
@@ -257,7 +258,7 @@ class ChatCommands(Cog):
 
         await interaction.response.defer(ephemeral=True)
 
-        async with channel.typing(), session.editing:
+        async with session.editing:
             await channel.delete_messages([Snowflake(id=x) for x in to_delete])
             for message_id in to_delete:
                 await session.splice_messages(message_id)
@@ -292,6 +293,8 @@ class ChatCommands(Cog):
         temperature: float = 0.7,
         max_tokens: int | None = None,
     ):
+        if not isinstance(interaction.channel, Messageable):
+            return
         session = ChatSession(
             assistant=self.bot.user.mention,
             options=ChatSessionOptions(
@@ -308,7 +311,9 @@ class ChatCommands(Cog):
             ),
         )
         await interaction.response.defer()
-        await session.answer(interaction.channel, interaction)
+        await session.answer(interaction.channel)
+        question = shorten(blockquote(text), 2000, replace_whitespace=False)
+        await interaction.followup.send(question)
 
     def get_preset(
         self,
@@ -335,7 +340,7 @@ class ChatCommands(Cog):
         ).safe_substitute(env)
 
         preset = self.CHAT_PRESETS.get(name_or_message)
-        if not preset:
+        if preset is None:
             tmpl = Template(name_or_message)
             return [ChatMessage(role="system", content=tmpl.safe_substitute(env))]
         else:

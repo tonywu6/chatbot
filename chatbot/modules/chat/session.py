@@ -1,12 +1,12 @@
 import asyncio
 import re
 import warnings
-from textwrap import shorten
-from typing import Optional
+from textwrap import dedent, shorten
+from typing import AsyncIterator, Literal, overload
 
 import openai
 import yaml
-from discord import Attachment, Embed, Interaction, Message, MessageType, Thread
+from discord import Attachment, Embed, Message, MessageType, Thread
 from discord.abc import Messageable
 from loguru import logger
 from markdown_it import MarkdownIt
@@ -16,6 +16,7 @@ from more_itertools import constrained_batches, first, locate, split_at
 from chatbot.modules.chat.helpers import num_tokens_from_messages
 from chatbot.modules.chat.models import (
     CHAT_MODELS,
+    ChatCompletionChunk,
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatMessage,
@@ -129,7 +130,15 @@ class ChatSession:
         )
         return {"embeds": [report], "files": [file]}
 
-    async def fetch(self):
+    @overload
+    async def fetch(self, stream: Literal[False] = False) -> ChatCompletionResponse:
+        ...
+
+    @overload
+    async def fetch(self, stream: Literal[True]) -> AsyncIterator[ChatCompletionChunk]:
+        ...
+
+    async def fetch(self, stream=False):
         request = self.to_request()
         if request.limit_max_tokens(self.token_count_upper_bound):
             warnings.warn(
@@ -140,7 +149,8 @@ class ChatSession:
         return await openai.ChatCompletion.acreate(
             **request.dict(),
             api_key=self.SECRETS.OPENAI_TOKEN.get_secret_value(),
-        )
+            stream=stream,
+        )  # type: ignore
 
     @classmethod
     async def from_thread(cls, thread: Thread):
@@ -326,30 +336,18 @@ class ChatSession:
         """
         return await self.splice_messages(message.id, message)
 
-    def prepare_replies(
-        self,
-        response: ChatCompletionResponse,
-    ) -> list[OutgoingMessage]:
-        """Parse an API response into a list of Discord messages.
+    def create_responses(self, text: str) -> list[OutgoingMessage]:
+        """Convert text into a list of Discord messages.
 
         Long messages will be divided into chunks, splitting at new lines or
         sentences. Code blocks become individual messages. Code blocks too long
         for a Discord message become attachments.
 
-        :param response: an API response dict
-        :type response: ChatCompletionResponse
+        :param text: the text to convert
+        :type text: str
         :return: a list of DiscordMessage typed dict
         :rtype: list[DiscordMessage]
         """
-        self.token_usage = response["usage"]["total_tokens"]
-
-        if not response["choices"]:
-            return []
-
-        choice = response["choices"][0]
-        text = choice["message"]["content"]
-        finish_reason = choice["finish_reason"]
-
         parser = MarkdownIt()
         tokens = parser.parse(text)
         tree = SyntaxTreeNode(tokens)
@@ -360,11 +358,12 @@ class ChatSession:
         for node in tree.children:
             line_begin, line_end = node.map
             block = "\n".join(filter(None, lines[line_begin:line_end]))
+            block = dedent(block).strip()
 
             if node.type == "fence":
                 if len(block) > MAX_MESSAGE_LENGTH:
                     with discord_open(f"code.{node.info}") as (stream, file):
-                        stream.write(node.content.encode())
+                        stream.write(block.encode())
                     chunks.append({"files": [file]})
                 else:
                     chunks.append({"content": block})
@@ -378,11 +377,16 @@ class ChatSession:
                     chunks.append({"content": sentences})
 
         def is_rich_content(message: OutgoingMessage) -> bool:
-            return message.get("embeds") or message.get("files")
+            if message.get("embeds") or message.get("files"):
+                return True
+            content = message.get("content")
+            return content is not None and content.startswith("```")
 
         results: list[OutgoingMessage] = []
 
         for group in split_at(chunks, is_rich_content, keep_separator=True):
+            if not group:
+                continue
             if is_rich_content(group[0]):
                 results.extend(group)
                 continue
@@ -390,16 +394,33 @@ class ChatSession:
             paragraphs = constrained_batches(texts, MAX_MESSAGE_LENGTH, strict=True)
             results.extend(({"content": "\n".join(p)} for p in paragraphs))
 
+        return results
+
+    def prepare_replies(
+        self,
+        response: ChatCompletionResponse,
+    ) -> list[OutgoingMessage]:
+        self.token_usage = response["usage"]["total_tokens"]
+
+        if not response["choices"]:
+            return []
+
+        choice = response["choices"][0]
+        text = choice["message"]["content"]
+        finish_reason = choice["finish_reason"]
+
+        results = self.create_responses(text)
+
         logger.info(
             "Parsed a completion response of length {length} into {num} messages",
             length=len(text),
             num=len(results),
         )
 
-        logger.info("Finish reason: {0}", finish_reason)
-
-        if finish_reason != "stop":
-            warnings.warn(f'Finish reason was "{finish_reason}"', stacklevel=2)
+        if finish_reason:
+            logger.info("Finish reason: {0}", finish_reason)
+            if finish_reason != "stop":
+                warnings.warn(f'Finish reason was "{finish_reason}"', stacklevel=2)
 
         return results
 
@@ -428,13 +449,13 @@ class ChatSession:
     async def answer(
         self,
         channel: Messageable,
-        interaction: Optional[Interaction] = None,
     ) -> bool:
         async with report_warnings(channel):
             logger.info("Sending API request")
 
             try:
-                response = await self.fetch()
+                async with channel.typing():
+                    response = await self.fetch()
             except Exception as e:
                 await report_error(e, messageable=channel)
                 return False
@@ -442,9 +463,8 @@ class ChatSession:
             replies = self.prepare_replies(response)
             logger.info("Resolved {0} replies", len(replies))
 
-            answerable = interaction or channel
             for reply in replies:
-                await send_message(answerable, reply)
+                await send_message(channel, reply)
 
             self.warn_about_token_limit()
             return True
@@ -455,8 +475,7 @@ class ChatSession:
         if not new_message or not self.should_answer(message):
             return False
 
-        async with message.channel.typing():
-            return await self.answer(message.channel)
+        return await self.answer(message.channel)
 
     def warn_about_token_limit(self):
         limit = CHAT_MODELS[self.options.request.model]["token_limit"]

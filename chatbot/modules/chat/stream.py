@@ -1,0 +1,2 @@
+class StreamingResponse:
+    pass
