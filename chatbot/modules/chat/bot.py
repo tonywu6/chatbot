@@ -178,7 +178,6 @@ class ChatCommands(Cog):
         max_tokens: int | None = None,
     ):
         private_thread = access == "private thread"
-        await interaction.response.defer(ephemeral=private_thread)
 
         if not isinstance(interaction.channel, TextChannel):
             raise UserInputError("This command can only be used in a text channel.")
@@ -193,16 +192,16 @@ class ChatCommands(Cog):
 
         logger.info("Chat {0}: started", thread.mention)
 
-        if private_thread:
-            response = (
-                Embed2()
-                .set_title("Session started!")
-                .set_description(thread.mention)
-                .personalized(interaction.user)
-            )
-            await interaction.followup.send(embed=response, ephemeral=True)
-        else:
-            await interaction.delete_original_response()
+        response = (
+            Embed2()
+            .set_title("Session started!")
+            .set_description(thread.mention)
+            .personalized(interaction.user)
+        )
+        await interaction.response.send_message(
+            embed=response,
+            ephemeral=private_thread,
+        )
 
         atom = ChatSessionOptions(
             request=ChatCompletionRequest(
