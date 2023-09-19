@@ -3,11 +3,13 @@ from typing import Literal, Optional, TypedDict
 
 from pydantic import BaseModel, Field, root_validator
 
-ChatModel = Literal["gpt-3.5-turbo"]
+ChatModel = Literal["gpt-4", "gpt-3.5-turbo-16k", "gpt-3.5-turbo"]
 
 ChatModelInfo = TypedDict("ModelInfo", {"token_limit": int})
 
 CHAT_MODELS: dict[ChatModel, ChatModelInfo] = {
+    "gpt-4": {"token_limit": 8192},
+    "gpt-3.5-turbo-16k": {"token_limit": 16384},
     "gpt-3.5-turbo": {"token_limit": 4096},
 }
 
@@ -70,7 +72,7 @@ class ChatMessage(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     user: str = "user"
-    model: ChatModel = "gpt-3.5-turbo"
+    model: ChatModel = "gpt-4"
     max_tokens: Optional[int] = None
     temperature: float = 0.7
     top_p: float = 1

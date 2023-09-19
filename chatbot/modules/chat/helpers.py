@@ -75,7 +75,7 @@ class IdempotentTasks:
 
 
 # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb
-def num_tokens_from_messages(messages: list[ChatMessage], model="gpt-3.5-turbo-0301"):
+def num_tokens_from_messages(messages: list[ChatMessage], model="gpt-4"):
     """Returns the number of tokens used by a list of messages."""
     try:
         encoding = tiktoken.encoding_for_model(model)

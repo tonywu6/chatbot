@@ -11,12 +11,14 @@ from discord import (
     Guild,
     Interaction,
     Message,
-    Object as Snowflake,
     RawBulkMessageDeleteEvent,
     RawMessageDeleteEvent,
     RawMessageUpdateEvent,
     TextChannel,
     Thread,
+)
+from discord import (
+    Object as Snowflake,
 )
 from discord.abc import GuildChannel, Messageable
 from discord.app_commands import command, context_menu, describe, guild_only
@@ -169,8 +171,8 @@ class ChatCommands(Cog):
         self,
         interaction: Interaction,
         *,
-        model: ChatModel = "gpt-3.5-turbo",
-        preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),  # type: ignore (doesn't work like TypeScript lol)
+        model: ChatModel = "gpt-4",
+        preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),  # type: ignore
         system_message: Optional[str] = None,
         access: Literal["private thread", "public thread"] = "public thread",
         response_timing: Timing = "immediately",
@@ -288,7 +290,7 @@ class ChatCommands(Cog):
         interaction: Interaction,
         *,
         text: str,
-        model: ChatModel = "gpt-3.5-turbo",
+        model: ChatModel = "gpt-4",
         preset: KeyOf[CHAT_PRESETS] = first(CHAT_PRESETS),  # type: ignore
         temperature: float = 0.7,
         max_tokens: int | None = None,

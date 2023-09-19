@@ -1,4 +1,7 @@
 {
   "cSpell.words": ["blurple", "emojize", "gifv", "mdformat", "psutil", "tiktoken"],
-  "esbonio.sphinx.confDir": ""
+  "files.associations": {
+    "requirements.lock": "pip-requirements",
+    "requirements-dev.lock": "pip-requirements"
+  }
 }

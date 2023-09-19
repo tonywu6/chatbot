@@ -162,8 +162,8 @@ class ChatSession:
             content = await message.attachments[0].read()
             try:
                 return ChatSessionOptions(**yaml.safe_load(content))
-            except (TypeError, ValueError, yaml.YAMLError):
-                raise ValueError
+            except (TypeError, ValueError, yaml.YAMLError) as e:
+                raise ValueError from e
 
         session: cls | None = None
 
@@ -491,7 +491,7 @@ class ChatSession:
             assistant="assistant",
             options=ChatSessionOptions(
                 request=ChatCompletionRequest(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4",
                     max_tokens=64,
                     temperature=0.5,
                 ),

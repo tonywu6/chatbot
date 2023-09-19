@@ -4,12 +4,11 @@ import sys
 from contextlib import suppress
 
 import click
-from loguru import logger
-
 from chatbot.bot import create_bot
 from chatbot.settings import AppSecrets
 from chatbot.utils.config import load_settings, set_profile
 from chatbot.utils.logging import configure_logging
+from loguru import logger
 
 
 @click.group()

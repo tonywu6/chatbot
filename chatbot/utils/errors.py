@@ -4,7 +4,8 @@ import warnings
 from contextlib import asynccontextmanager
 
 import openai
-from discord import File, Interaction, Message, errors as discord_errors
+from discord import File, Interaction, Message
+from discord import errors as discord_errors
 from discord.abc import Messageable
 from discord.app_commands import errors as app_cmd_errors
 from discord.ext.commands import errors as ext_cmd_errors
